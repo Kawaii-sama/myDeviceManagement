@@ -27,3 +27,13 @@ export const checkinDevice = async (id) => {
 
   return response.data
 }
+
+// ADD device
+export const addDevice = async (deviceData) => {
+  const response = await axios.post(
+    API_URL,
+    deviceData
+  )
+
+  return response.data
+}
