@@ -9,6 +9,7 @@ import {
 
 function Dashboard() {
   const [devices, setDevices] = useState([])
+  const [loading, setLoading] = useState(true)
   const [model, setModel] = useState("")
   const [deviceId, setDeviceId] = useState("")
 
@@ -18,16 +19,20 @@ function Dashboard() {
 
   const fetchDevices = async () => {
     try {
-      const data = await getDevices()
+        setLoading(true)
 
-      setDevices(data)
+        const data = await getDevices()
+
+        setDevices(data)
     } catch (error) {
       console.log(error)
+    } finally {
+        setLoading(false)
     }
   }
 
   // CHECKOUT
-  const handleCheckout = async (id) => {
+    const handleCheckout = async (id) => {
     const engineerName = prompt("Engineer Name")
     const pcNumber = prompt("PC Number")
     const floorNumber = prompt("Floor Number")
@@ -91,7 +96,7 @@ function Dashboard() {
 
 
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
+    <div className="min-h-screen bg-slate-100 p-8">
       <h1 className="text-3xl font-bold text-gray-800 mb-6">
         Device Dashboard
       </h1>
@@ -125,61 +130,71 @@ function Dashboard() {
       </button>
     </form>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {devices.map((device) => (
-          <div
-            key={device._id}
-            className="bg-white p-6 rounded-2xl shadow-sm"
+      {loading ? (
+  <p className="text-gray-500">Loading devices...</p>
+) : devices.length === 0 ? (
+  <div className="bg-white p-10 rounded-2xl shadow-sm text-center">
+    <p className="text-gray-500 text-lg">
+      No devices added yet
+    </p>
+  </div>
+) : (
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+    {devices.map((device) => (
+      <div
+        key={device._id}
+        className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-md transition"
+      >
+        <h2 className="text-xl font-semibold text-gray-800">
+          {device.model}
+        </h2>
+
+        <p className="text-gray-500 mt-2">
+          ID: {device.deviceId}
+        </p>
+
+        <div className="mt-4">
+          <span
+            className={`px-3 py-1 rounded-full text-sm font-medium ${
+              device.status === "available"
+                ? "bg-green-100 text-green-700"
+                : "bg-red-100 text-red-700"
+            }`}
           >
-            <h2 className="text-xl font-semibold text-gray-800">
-              {device.model}
-            </h2>
+            {device.status}
+          </span>
+        </div>
 
-            <p className="text-gray-500 mt-2">
-              ID: {device.deviceId}
-            </p>
+        <div className="mt-4">
+          {device.status === "available" ? (
+            <button
+              onClick={() => handleCheckout(device._id)}
+              className="bg-blue-600 hover:bg-blue-700 transition text-white px-4 py-2 rounded-xl"
+            >
+              Checkout
+            </button>
+          ) : (
+            <button
+              onClick={() => handleCheckin(device._id)}
+              className="bg-red-600 hover:bg-red-700 transition text-white px-4 py-2 rounded-xl"
+            >
+              Checkin
+            </button>
+          )}
+        </div>
 
-            <div className="mt-4">
-              <span
-                className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  device.status === "available"
-                    ? "bg-green-100 text-green-700"
-                    : "bg-red-100 text-red-700"
-                }`}
-              >
-                {device.status}
-              </span>
-            </div>
-
-            <div className="mt-4">
-              {device.status === "available" ? (
-                <button
-                  onClick={() => handleCheckout(device._id)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl"
-                >
-                  Checkout
-                </button>
-              ) : (
-                <button
-                  onClick={() => handleCheckin(device._id)}
-                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl"
-                >
-                  Checkin
-                </button>
-              )}
-            </div>
-
-            {device.status === "in-use" && (
-              <div className="mt-4 text-sm text-gray-600">
-                <p>Engineer: {device.engineerName}</p>
-                <p>PC: {device.pcNumber}</p>
-                <p>Floor: {device.floorNumber}</p>
-                <p>Return: {device.expectedReturnTime}</p>
-              </div>
-            )}
+        {device.status === "in-use" && (
+          <div className="mt-4 text-sm text-gray-600 space-y-1">
+            <p>Engineer: {device.engineerName}</p>
+            <p>PC: {device.pcNumber}</p>
+            <p>Floor: {device.floorNumber}</p>
+            <p>Return: {device.expectedReturnTime}</p>
           </div>
-        ))}
+        )}
       </div>
+    ))}
+    </div>
+    )}
     </div>
   )
 }
