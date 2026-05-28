@@ -4,6 +4,9 @@ const cors = require("cors")
 const dotenv = require("dotenv")
 
 const connectDB = require("./src/config/db")
+const deviceRoutes = require("./src/routes/deviceRoutes")
+
+
 
 dotenv.config()
 
@@ -15,6 +18,12 @@ const app = express()
 
 app.use(cors())
 app.use(express.json())
+
+
+
+app.use("/api/devices", deviceRoutes)
+
+
 
 app.get("/", (req, res) => {
   res.send("API Running")
