@@ -17,16 +17,18 @@ function Dashboard() {
   const [pcNumber, setPcNumber] = useState("")
   const [floorNumber, setFloorNumber] = useState("")
   const [expectedReturnTime, setExpectedReturnTime] = useState("")
+  const [search, setSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
 
   useEffect(() => {
-  fetchDevices()
-
-  const interval = setInterval(() => {
     fetchDevices()
-  }, 3000)
 
-  return () => clearInterval(interval)
-    }, [])
+    const interval = setInterval(() => {
+        fetchDevices()
+    }, 3000)
+
+    return () => clearInterval(interval)
+   }, [])
 
   const fetchDevices = async () => {
     try {
@@ -109,6 +111,26 @@ function Dashboard() {
 }
 
 
+
+
+const filteredDevices = devices.filter((device) => {
+  const matchesSearch =
+    device.model
+      .toLowerCase()
+      .includes(search.toLowerCase()) ||
+    device.deviceId
+      .toLowerCase()
+      .includes(search.toLowerCase())
+
+  const matchesStatus =
+    statusFilter === "all"
+      ? true
+      : device.status === statusFilter
+
+  return matchesSearch && matchesStatus
+})
+
+
   return (
     <div className="min-h-screen bg-slate-100 p-8">
       <h1 className="text-3xl font-bold text-gray-800 mb-6">
@@ -146,6 +168,28 @@ function Dashboard() {
            </h2>
         </div>
       </div>
+
+
+    <div className="flex flex-col md:flex-row gap-4 mb-6">
+  <input
+    type="text"
+    placeholder="Search devices..."
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    className="bg-white border border-gray-300 p-3 rounded-xl flex-1"
+  />
+
+  <select
+    value={statusFilter}
+    onChange={(e) => setStatusFilter(e.target.value)}
+    className="bg-white border border-gray-300 p-3 rounded-xl"
+  >
+    <option value="all">All Devices</option>
+    <option value="available">Available</option>
+    <option value="in-use">In Use</option>
+  </select>
+</div>
+    
 
 
     <form
@@ -186,7 +230,7 @@ function Dashboard() {
   </div>
 ) : (
   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-    {devices.map((device) => (
+    {filteredDevices.map((device) => (
       <div
         key={device._id}
         className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-md transition"
