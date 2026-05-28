@@ -12,6 +12,11 @@ function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [model, setModel] = useState("")
   const [deviceId, setDeviceId] = useState("")
+  const [selectedDeviceId, setSelectedDeviceId] = useState(null)
+  const [engineerName, setEngineerName] = useState("")
+  const [pcNumber, setPcNumber] = useState("")
+  const [floorNumber, setFloorNumber] = useState("")
+  const [expectedReturnTime, setExpectedReturnTime] = useState("")
 
   useEffect(() => {
     fetchDevices()
@@ -31,35 +36,38 @@ function Dashboard() {
     }
   }
 
-  // CHECKOUT
-    const handleCheckout = async (id) => {
-    const engineerName = prompt("Engineer Name")
-    const pcNumber = prompt("PC Number")
-    const floorNumber = prompt("Floor Number")
-    const expectedReturnTime = prompt("Expected Return Time")
-
-    if (
-      !engineerName ||
-      !pcNumber ||
-      !floorNumber ||
-      !expectedReturnTime
-    ) {
-      return
+  const openCheckoutModal = (id) => {
+  setSelectedDeviceId(id)
     }
 
-    try {
-      await checkoutDevice(id, {
-        engineerName,
-        pcNumber,
-        floorNumber,
-        expectedReturnTime,
-      })
 
-      fetchDevices()
-    } catch (error) {
-      console.log(error)
-    }
+    const handleCheckout = async (e) => {
+  e.preventDefault()
+
+  try {
+    await checkoutDevice(selectedDeviceId, {
+      engineerName,
+      pcNumber,
+      floorNumber,
+      expectedReturnTime,
+    })
+
+    setSelectedDeviceId(null)
+
+    setEngineerName("")
+    setPcNumber("")
+    setFloorNumber("")
+    setExpectedReturnTime("")
+
+    fetchDevices()
+  } catch (error) {
+    console.log(error)
   }
+    }
+
+
+
+  
 
   // CHECKIN
   const handleCheckin = async (id) => {
@@ -168,7 +176,7 @@ function Dashboard() {
         <div className="mt-4">
           {device.status === "available" ? (
             <button
-              onClick={() => handleCheckout(device._id)}
+              onClick={() => openCheckoutModal(device._id)}
               className="bg-blue-600 hover:bg-blue-700 transition text-white px-4 py-2 rounded-xl"
             >
               Checkout
@@ -195,6 +203,78 @@ function Dashboard() {
     ))}
     </div>
     )}
+    
+    {selectedDeviceId && (
+  <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4">
+    <form
+      onSubmit={handleCheckout}
+      className="bg-white w-full max-w-md p-6 rounded-2xl shadow-lg"
+    >
+      <h2 className="text-2xl font-bold text-gray-800 mb-6">
+        Checkout Device
+      </h2>
+
+      <div className="space-y-4">
+        <input
+          type="text"
+          placeholder="Engineer Name"
+          value={engineerName}
+          onChange={(e) => setEngineerName(e.target.value)}
+          className="w-full border border-gray-300 p-3 rounded-xl"
+          required
+        />
+
+        <input
+          type="text"
+          placeholder="PC Number"
+          value={pcNumber}
+          onChange={(e) => setPcNumber(e.target.value)}
+          className="w-full border border-gray-300 p-3 rounded-xl"
+          required
+        />
+
+        <input
+          type="text"
+          placeholder="Floor Number"
+          value={floorNumber}
+          onChange={(e) => setFloorNumber(e.target.value)}
+          className="w-full border border-gray-300 p-3 rounded-xl"
+          required
+        />
+
+        <input
+          type="text"
+          placeholder="Expected Return Time"
+          value={expectedReturnTime}
+          onChange={(e) =>
+            setExpectedReturnTime(e.target.value)
+          }
+          className="w-full border border-gray-300 p-3 rounded-xl"
+          required
+        />
+      </div>
+
+      <div className="flex gap-3 mt-6">
+        <button
+          type="submit"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-xl flex-1"
+        >
+          Confirm Checkout
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSelectedDeviceId(null)}
+          className="bg-gray-200 hover:bg-gray-300 px-5 py-3 rounded-xl"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  </div>
+  )}
+
+    
     </div>
   )
 }
