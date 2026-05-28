@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react"
-import { getDevices } from "../services/deviceService"
+
+import {
+  getDevices,
+  checkoutDevice,
+  checkinDevice,
+} from "../services/deviceService"
 
 function Dashboard() {
   const [devices, setDevices] = useState([])
@@ -13,6 +18,47 @@ function Dashboard() {
       const data = await getDevices()
 
       setDevices(data)
+    } catch (error) {
+      console.log(error)
+    }
+  }
+
+  // CHECKOUT
+  const handleCheckout = async (id) => {
+    const engineerName = prompt("Engineer Name")
+    const pcNumber = prompt("PC Number")
+    const floorNumber = prompt("Floor Number")
+    const expectedReturnTime = prompt("Expected Return Time")
+
+    if (
+      !engineerName ||
+      !pcNumber ||
+      !floorNumber ||
+      !expectedReturnTime
+    ) {
+      return
+    }
+
+    try {
+      await checkoutDevice(id, {
+        engineerName,
+        pcNumber,
+        floorNumber,
+        expectedReturnTime,
+      })
+
+      fetchDevices()
+    } catch (error) {
+      console.log(error)
+    }
+  }
+
+  // CHECKIN
+  const handleCheckin = async (id) => {
+    try {
+      await checkinDevice(id)
+
+      fetchDevices()
     } catch (error) {
       console.log(error)
     }
@@ -48,6 +94,24 @@ function Dashboard() {
               >
                 {device.status}
               </span>
+            </div>
+
+            <div className="mt-4">
+              {device.status === "available" ? (
+                <button
+                  onClick={() => handleCheckout(device._id)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl"
+                >
+                  Checkout
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleCheckin(device._id)}
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl"
+                >
+                  Checkin
+                </button>
+              )}
             </div>
 
             {device.status === "in-use" && (
