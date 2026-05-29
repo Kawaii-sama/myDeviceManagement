@@ -6,6 +6,7 @@ import {
   checkoutDevice,
   checkinDevice,
   addDevice,
+  deleteDevice,
 } from "../services/deviceService"
 
 function Dashboard() {
@@ -91,6 +92,30 @@ function Dashboard() {
       console.log(error)
     }
   }
+
+
+
+  const handleDeleteDevice = async (id) => {
+  const confirmDelete = window.confirm(
+    "Delete this device?"
+  )
+
+  if (!confirmDelete) {
+    return
+  }
+
+  try {
+    await deleteDevice(id)
+
+    toast.success("Device deleted")
+
+    fetchDevices()
+  } catch (error) {
+    console.log(error)
+  }
+}
+
+
 
   const handleAddDevice = async (e) => {
   e.preventDefault()
@@ -277,6 +302,13 @@ const filteredDevices = devices.filter((device) => {
             </button>
           )}
         </div>
+
+        <button
+          onClick={() => handleDeleteDevice(device._id)}
+          className="mt-3 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-xl w-full"
+        >
+          Delete
+          </button>
 
         {device.status === "in-use" && (
           <div className="mt-4 text-sm text-gray-600 space-y-1">

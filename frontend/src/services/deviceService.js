@@ -37,3 +37,13 @@ export const addDevice = async (deviceData) => {
 
   return response.data
 }
+
+
+// DELETE device
+export const deleteDevice = async (id) => {
+  const response = await axios.delete(
+    `${API_URL}/${id}`
+  )
+
+  return response.data
+}
