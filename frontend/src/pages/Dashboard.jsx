@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { toast } from "react-toastify"
 
 import {
   getDevices,
@@ -50,17 +51,19 @@ function Dashboard() {
 
 
     const handleCheckout = async (e) => {
-  e.preventDefault()
+    e.preventDefault()
 
-  try {
-    await checkoutDevice(selectedDeviceId, {
-      engineerName,
-      pcNumber,
-      floorNumber,
-      expectedReturnTime,
-    })
+    try {
+        await checkoutDevice(selectedDeviceId, {
+        engineerName,
+        pcNumber,
+        floorNumber,
+        expectedReturnTime,
+        })
 
-    setSelectedDeviceId(null)
+        toast.success("Device checked out successfully")
+
+        setSelectedDeviceId(null)
 
     setEngineerName("")
     setPcNumber("")
@@ -81,6 +84,7 @@ function Dashboard() {
   const handleCheckin = async (id) => {
     try {
       await checkinDevice(id)
+      toast.success("Device checked in")
 
       fetchDevices()
     } catch (error) {
@@ -100,6 +104,7 @@ function Dashboard() {
       model,
       deviceId,
     })
+    toast.success("Device added successfully")
 
     setModel("")
     setDeviceId("")
