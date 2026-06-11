@@ -1,5 +1,13 @@
 const express = require("express")
 
+
+const {
+  protect,
+  adminOnly,
+} = require("../middleware/authMiddleware")
+
+
+
 const {
   getDevices,
   addDevice,
@@ -10,14 +18,32 @@ const {
 
 const router = express.Router()
 
-router.get("/", getDevices)
+router.get("/", protect, getDevices)
 
-router.post("/", addDevice)
+router.post(
+  "/",
+  protect,
+  adminOnly,
+  addDevice
+)
 
-router.put("/checkout/:id", checkoutDevice)
+router.put(
+  "/checkout/:id",
+  protect,
+  checkoutDevice
+)
 
-router.put("/checkin/:id", checkinDevice)
+router.put(
+  "/checkin/:id",
+  protect,
+  checkinDevice
+)
 
-router.delete("/:id", deleteDevice)
+router.delete(
+  "/:id",
+  protect,
+  adminOnly,
+  deleteDevice
+)
 
 module.exports = router
