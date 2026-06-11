@@ -2,9 +2,28 @@ import axios from "axios"
 
 const API_URL = "https://mydevicemanagement.onrender.com/api/devices"
 
+
+
+
+const getConfig = () => {
+  const userInfo = JSON.parse(
+    localStorage.getItem("userInfo")
+  )
+
+  return {
+    headers: {
+      Authorization: `Bearer ${userInfo.token}`,
+    },
+  }
+}
+
+
 // GET devices
 export const getDevices = async () => {
-  const response = await axios.get(API_URL)
+  const response = await axios.get(
+  API_URL,
+  getConfig()
+)
 
   return response.data
 }
@@ -13,7 +32,8 @@ export const getDevices = async () => {
 export const checkoutDevice = async (id, formData) => {
   const response = await axios.put(
     `${API_URL}/checkout/${id}`,
-    formData
+    formData,
+    getConfig()
   )
 
   return response.data
@@ -22,7 +42,9 @@ export const checkoutDevice = async (id, formData) => {
 // CHECKIN device
 export const checkinDevice = async (id) => {
   const response = await axios.put(
-    `${API_URL}/checkin/${id}`
+    `${API_URL}/checkin/${id}`,
+    {},
+    getConfig()
   )
 
   return response.data
@@ -31,9 +53,10 @@ export const checkinDevice = async (id) => {
 // ADD device
 export const addDevice = async (deviceData) => {
   const response = await axios.post(
-    API_URL,
-    deviceData
-  )
+  API_URL,
+  deviceData,
+  getConfig()
+)
 
   return response.data
 }
@@ -42,8 +65,9 @@ export const addDevice = async (deviceData) => {
 // DELETE device
 export const deleteDevice = async (id) => {
   const response = await axios.delete(
-    `${API_URL}/${id}`
-  )
+  `${API_URL}/${id}`,
+  getConfig()
+)
 
   return response.data
 }
