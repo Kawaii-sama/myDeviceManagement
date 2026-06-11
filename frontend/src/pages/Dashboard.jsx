@@ -22,6 +22,13 @@ function Dashboard() {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
 
+  const userInfo = JSON.parse(
+  localStorage.getItem("userInfo")
+)
+
+const isAdmin =
+  userInfo?.role === "admin"
+
   useEffect(() => {
     fetchDevices()
 
@@ -162,15 +169,27 @@ const filteredDevices = devices.filter((device) => {
 
 
   return (
-    <div className="min-h-screen bg-slate-100 p-8">
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">
+  <div className="min-h-screen bg-slate-100 p-8">
+
+    <div className="flex justify-between items-center mb-6">
+      <h1 className="text-3xl font-bold text-gray-800">
         Device Dashboard
       </h1>
 
+      <button
+        onClick={() => {
+          localStorage.removeItem("userInfo")
+          window.location.href = "/"
+        }}
+        className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl"
+      >
+        Logout
+      </button>
+    </div>
 
-      <p className="text-gray-500 mb-6">
-        Live device tracking system
-      </p>
+    <p className="text-gray-500 mb-6">
+      Live device tracking system
+    </p>
 
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
@@ -222,6 +241,7 @@ const filteredDevices = devices.filter((device) => {
     
 
 
+  {isAdmin && (
     <form
         onSubmit={handleAddDevice}
         className="bg-white p-6 rounded-2xl shadow-sm mb-8 flex flex-col md:flex-row gap-4"
@@ -249,6 +269,8 @@ const filteredDevices = devices.filter((device) => {
         Add Device
       </button>
     </form>
+
+  )}
 
       {loading ? (
   <p className="text-gray-500">Loading devices...</p>
@@ -303,12 +325,15 @@ const filteredDevices = devices.filter((device) => {
           )}
         </div>
 
+
+      {isAdmin && (
         <button
           onClick={() => handleDeleteDevice(device._id)}
           className="mt-3 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-xl w-full"
         >
           Delete
           </button>
+      )}
 
         {device.status === "in-use" && (
           <div className="mt-4 text-sm text-gray-600 space-y-1">
