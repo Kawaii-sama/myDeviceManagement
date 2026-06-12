@@ -6,6 +6,13 @@ const {
   createEmployee,
 } = require("../controllers/authController")
 
+
+const {
+  protect,
+  adminOnly,
+} = require("../middleware/authMiddleware")
+
+
 const router = express.Router()
 
 router.post("/create-admin", createAdmin)

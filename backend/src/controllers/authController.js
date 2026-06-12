@@ -91,7 +91,7 @@ const loginUser = async (req, res) => {
 
 
 
-const createEmployee = async (req, res) => {
+const registerUser = async (req, res) => {
   try {
     const { name, email, password } = req.body
 
@@ -129,5 +129,5 @@ const createEmployee = async (req, res) => {
 module.exports = {
   createAdmin,
   loginUser,
-  createEmployee,
+  registerUser,
 }
