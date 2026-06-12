@@ -6,6 +6,7 @@ const dotenv = require("dotenv")
 const connectDB = require("./src/config/db")
 const deviceRoutes = require("./src/routes/deviceRoutes")
 const authRoutes = require("./src/routes/authRoutes")
+const requestRoutes = require("./src/routes/requestRoutes")
 
 
 
@@ -24,6 +25,7 @@ app.use(express.json())
 
 app.use("/api/auth", authRoutes)
 app.use("/api/devices", deviceRoutes)
+app.use("/api/requests", requestRoutes)
 
 
 
