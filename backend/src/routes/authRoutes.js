@@ -3,7 +3,7 @@ const express = require("express")
 const {
   createAdmin,
   loginUser,
-  createEmployee,
+  registerUser,
 } = require("../controllers/authController")
 
 
@@ -19,6 +19,6 @@ router.post("/create-admin", createAdmin)
 
 router.post("/login", loginUser)
 
-router.post("/create-employee", createEmployee)
+router.post("/register", registerUser)
 
 module.exports = router
