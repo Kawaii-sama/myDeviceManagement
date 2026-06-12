@@ -1,5 +1,7 @@
 const Request = require("../models/requestModel")
 const Device = require("../models/deviceModel")
+const Notification = require("../models/notificationModel")
+
 
 // CREATE REQUEST
 const createRequest = async (req, res) => {
@@ -20,6 +22,12 @@ const createRequest = async (req, res) => {
       employeeId: req.user._id,
       employeeName: req.user.name,
     })
+
+
+    await Notification.create({
+    message: `${req.user.name} requested ${device.model}`,
+    })
+
 
     res.status(201).json(request)
   } catch (error) {
@@ -74,6 +82,10 @@ const approveRequest = async (req, res) => {
 
     await request.save()
     await device.save()
+
+    await Notification.create({
+    message: `Admin approved ${device.model} for ${request.employeeName}`,
+    })
 
     res.json({
       message: "Request approved and device assigned",
