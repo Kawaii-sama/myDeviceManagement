@@ -7,6 +7,8 @@ const connectDB = require("./src/config/db")
 const deviceRoutes = require("./src/routes/deviceRoutes")
 const authRoutes = require("./src/routes/authRoutes")
 const requestRoutes = require("./src/routes/requestRoutes")
+const notificationRoutes = require("./src/routes/notificationRoutes")
+
 
 
 
@@ -20,6 +22,7 @@ const app = express()
 
 app.use(cors())
 app.use(express.json())
+app.use("/api/notifications",notificationRoutes)
 
 
 

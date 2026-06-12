@@ -1,13 +1,16 @@
 const mongoose = require("mongoose")
 
 const notificationSchema = new mongoose.Schema(
-{
-  type: String,
-  message: String
-},
-{
-  timestamps: true
-})
+  {
+    message: {
+      type: String,
+      required: true,
+    },
+  },
+  {
+    timestamps: true,
+  }
+)
 
 module.exports = mongoose.model(
   "Notification",
