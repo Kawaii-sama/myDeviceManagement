@@ -9,6 +9,9 @@ import {
   deleteDevice,
 } from "../services/deviceService"
 
+import { getNotifications }
+from "../services/notificationService"
+
 function Dashboard() {
   const [devices, setDevices] = useState([])
   const [loading, setLoading] = useState(true)
@@ -21,6 +24,7 @@ function Dashboard() {
   const [expectedReturnTime, setExpectedReturnTime] = useState("")
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [notifications, setNotifications] = useState([])
 
   const userInfo = JSON.parse(
   localStorage.getItem("userInfo")
@@ -30,14 +34,16 @@ const isAdmin =
   userInfo?.role === "admin"
 
   useEffect(() => {
+  fetchDevices()
+  fetchNotifications()
+
+  const interval = setInterval(() => {
     fetchDevices()
+    fetchNotifications()
+  }, 3000)
 
-    const interval = setInterval(() => {
-        fetchDevices()
-    }, 3000)
-
-    return () => clearInterval(interval)
-   }, [])
+  return () => clearInterval(interval)
+}, [])
 
   const fetchDevices = async () => {
     try {
@@ -52,6 +58,17 @@ const isAdmin =
         setLoading(false)
     }
   }
+
+  const fetchNotifications = async () => {
+  try {
+    const data =
+      await getNotifications()
+
+    setNotifications(data)
+  } catch (error) {
+    console.log(error)
+  }
+}
 
   const openCheckoutModal = (id) => {
   setSelectedDeviceId(id)
@@ -175,6 +192,25 @@ const filteredDevices = devices.filter((device) => {
       <h1 className="text-3xl font-bold text-gray-800">
         Device Dashboard
       </h1>
+
+      <div className="bg-white p-4 rounded-2xl shadow-sm mb-6">
+  <h2 className="text-xl font-semibold mb-3">
+    🔔 Notifications
+  </h2>
+
+  {notifications.length === 0 ? (
+    <p>No notifications</p>
+  ) : (
+    notifications.map((notification) => (
+      <div
+        key={notification._id}
+        className="border-b py-2"
+      >
+        {notification.message}
+      </div>
+    ))
+  )}
+</div>
 
       <button
         onClick={() => {
