@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { registerUser } from "../services/authService"
 
 function Register() {
   const [name, setName] = useState("")
@@ -15,11 +16,29 @@ function Register() {
       return
     }
 
-    console.log({
-      name,
-      email,
-      password,
-    })
+    try {
+      const data = await registerUser({
+        name,
+        email,
+        password,
+      })
+
+      console.log(data)
+
+      alert("Registration successful")
+
+      setName("")
+      setEmail("")
+      setPassword("")
+      setConfirmPassword("")
+    } catch (error) {
+      console.log(error)
+
+      alert(
+        error.response?.data?.message ||
+        "Registration failed"
+      )
+    }
   }
 
   return (
@@ -40,6 +59,7 @@ function Register() {
             setName(e.target.value)
           }
           className="w-full border p-3 rounded-xl mb-4"
+          required
         />
 
         <input
@@ -50,6 +70,7 @@ function Register() {
             setEmail(e.target.value)
           }
           className="w-full border p-3 rounded-xl mb-4"
+          required
         />
 
         <input
@@ -60,6 +81,7 @@ function Register() {
             setPassword(e.target.value)
           }
           className="w-full border p-3 rounded-xl mb-4"
+          required
         />
 
         <input
@@ -70,11 +92,12 @@ function Register() {
             setConfirmPassword(e.target.value)
           }
           className="w-full border p-3 rounded-xl mb-4"
+          required
         />
 
         <button
           type="submit"
-          className="w-full bg-green-600 text-white p-3 rounded-xl"
+          className="w-full bg-green-600 hover:bg-green-700 text-white p-3 rounded-xl"
         >
           Register
         </button>

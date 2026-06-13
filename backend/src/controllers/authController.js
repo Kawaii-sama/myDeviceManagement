@@ -12,7 +12,7 @@ const generateToken = (id, role) => {
   )
 }
 
-
+// CREATE ADMIN
 const createAdmin = async (req, res) => {
   try {
     const adminExists = await User.findOne({
@@ -41,19 +41,25 @@ const createAdmin = async (req, res) => {
 
     res.status(201).json(admin)
   } catch (error) {
+    console.log(error)
+
     res.status(500).json({
       message: error.message,
     })
   }
 }
 
-
-
+// LOGIN
 const loginUser = async (req, res) => {
   try {
+    console.log("========== LOGIN ATTEMPT ==========")
+    console.log("BODY:", req.body)
+
     const { email, password } = req.body
 
     const user = await User.findOne({ email })
+
+    console.log("USER FOUND:", user)
 
     if (!user) {
       return res.status(400).json({
@@ -66,11 +72,15 @@ const loginUser = async (req, res) => {
       user.password
     )
 
+    console.log("PASSWORD MATCH:", match)
+
     if (!match) {
       return res.status(400).json({
         message: "Invalid credentials",
       })
     }
+
+    console.log("LOGIN SUCCESS")
 
     res.json({
       _id: user._id,
@@ -83,16 +93,20 @@ const loginUser = async (req, res) => {
       ),
     })
   } catch (error) {
+    console.log("LOGIN ERROR:", error)
+
     res.status(500).json({
       message: error.message,
     })
   }
 }
 
-
-
+// REGISTER
 const registerUser = async (req, res) => {
   try {
+    console.log("========== REGISTER ==========")
+    console.log("BODY:", req.body)
+
     const { name, email, password } = req.body
 
     const exists = await User.findOne({
@@ -117,14 +131,17 @@ const registerUser = async (req, res) => {
       role: "employee",
     })
 
+    console.log("USER CREATED:", employee)
+
     res.status(201).json(employee)
   } catch (error) {
+    console.log("REGISTER ERROR:", error)
+
     res.status(500).json({
       message: error.message,
     })
   }
 }
-
 
 module.exports = {
   createAdmin,
