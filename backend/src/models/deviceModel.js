@@ -15,8 +15,23 @@ const deviceSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["available", "in-use"],
+      enum: [
+        "available",
+        "pending",
+        "assigned",
+      ],
       default: "available",
+    },
+
+    assignedTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    assignedToName: {
+      type: String,
+      default: "",
     },
 
     engineerName: {
@@ -44,4 +59,7 @@ const deviceSchema = new mongoose.Schema(
   }
 )
 
-module.exports = mongoose.model("Device", deviceSchema)
+module.exports = mongoose.model(
+  "Device",
+  deviceSchema
+)

@@ -16,6 +16,8 @@ const createRequest = async (req, res) => {
       })
     }
 
+    device.status = "pending"
+    await device.save()
     const request = await Request.create({
       deviceId: device._id,
       deviceModel: device.model,
@@ -76,19 +78,24 @@ const approveRequest = async (req, res) => {
 
     request.status = "approved"
 
-    device.status = "in-use"
-    device.engineerName =
+    device.status = "assigned"
+
+    device.assignedTo =
+      request.employeeId
+
+    device.assignedToName =
       request.employeeName
 
     await request.save()
     await device.save()
 
     await Notification.create({
-    message: `Admin approved ${device.model} for ${request.employeeName}`,
+      message: `Admin approved ${device.model} for ${request.employeeName}`,
     })
 
     res.json({
-      message: "Request approved and device assigned",
+      message:
+        "Request approved and device assigned",
       request,
       device,
     })
