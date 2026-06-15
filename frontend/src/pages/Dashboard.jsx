@@ -22,23 +22,31 @@ function Dashboard() {
 
   // ─── Data fetching ───────────────────────────────────────────────
   const fetchAll = async () => {
-    try {
-      const deviceData = await getDevices()
-      setDevices(deviceData)
-
-      const notifData = await getNotifications()
-      setNotifications(notifData)
-
-      if (isAdmin) {
-        const requestData = await getRequests()
-        setRequests(requestData)
-      }
-    } catch (error) {
-      console.log(error)
-    } finally {
-      setLoading(false)
-    }
+  try {
+    const deviceData = await getDevices()
+    setDevices(deviceData)
+  } catch (error) {
+    console.log("Devices error:", error)
   }
+
+  try {
+    const notifData = await getNotifications()
+    setNotifications(notifData)
+  } catch (error) {
+    console.log("Notifications error:", error)
+  }
+
+  try {
+    if (isAdmin) {
+      const requestData = await getRequests()
+      setRequests(requestData)
+    }
+  } catch (error) {
+    console.log("Requests error:", error)
+  }
+
+  setLoading(false)
+}
 
   useEffect(() => {
     fetchAll()
