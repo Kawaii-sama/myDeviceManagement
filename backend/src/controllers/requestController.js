@@ -100,17 +100,7 @@ const approveRequest = async (req, res) => {
     device.assignedToName = request.employeeName
     await device.save()
 
-    // Reject all OTHER pending requests for the same device
-    // They stay in DB so employee can see "rejected" in My Requests
-    // but admin won't see them cluttering the pending list
-    await Request.updateMany(
-      {
-        deviceId: device._id,
-        _id: { $ne: request._id },
-        status: "pending",
-      },
-      { status: "rejected" }
-    )
+   
 
     // Broadcast notification
     await Notification.create({
