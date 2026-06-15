@@ -26,10 +26,6 @@ const createRequest = async (req, res) => {
     })
 
 
-    await Notification.create({
-    message: `${req.user.name} requested ${device.model}`,
-    })
-
 
     res.status(201).json(request)
   } catch (error) {
