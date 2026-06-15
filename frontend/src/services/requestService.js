@@ -23,6 +23,15 @@ export const createRequest = async (deviceId) => {
   return response.data
 }
 
+// Employee: get their own requests
+export const getMyRequests = async () => {
+  const response = await axios.get(
+    `${API_URL}/my`,
+    getConfig()
+  )
+  return response.data
+}
+
 // Admin: get all requests
 export const getRequests = async () => {
   const response = await axios.get(
