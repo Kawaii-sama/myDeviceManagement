@@ -14,6 +14,7 @@ const {
   checkoutDevice,
   checkinDevice,
   deleteDevice,
+  returnDevice,
 } = require("../controllers/deviceController")
 
 const router = express.Router()
@@ -44,6 +45,12 @@ router.delete(
   protect,
   adminOnly,
   deleteDevice
+)
+
+router.put(
+  "/return/:id",
+  protect,
+  returnDevice
 )
 
 module.exports = router

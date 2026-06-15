@@ -22,6 +22,14 @@ const app = express()
 
 app.use(cors())
 app.use(express.json())
+
+
+app.post("/api/auth/test", (req, res) => {
+  console.log("TEST ROUTE HIT")
+  console.log("BODY:", req.body)
+  res.json({ received: req.body })
+})
+
 app.use("/api/notifications",notificationRoutes)
 
 
