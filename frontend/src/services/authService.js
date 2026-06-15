@@ -1,7 +1,7 @@
 import axios from "axios"
 
 const API_URL =
-  "http://localhost:5000/api/auth"
+  "https://mydevicemanagement.onrender.com/api/auth"
 
 export const loginUser = async (userData) => {
   const response = await axios.post(

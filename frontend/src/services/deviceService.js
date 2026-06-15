@@ -1,6 +1,6 @@
 import axios from "axios"
 
-const API_URL = "http://localhost:5000/api/devices"
+const API_URL = "https://mydevicemanagement.onrender.com/api/devices"
 
 const getConfig = () => {
   const userInfo = JSON.parse(

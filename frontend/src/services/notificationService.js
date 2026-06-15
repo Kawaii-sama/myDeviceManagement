@@ -1,7 +1,7 @@
 import axios from "axios"
 
 const API_URL =
-  "http://localhost:5000/api/notifications"
+  "https://mydevicemanagement.onrender.com/notifications"
 
 export const getNotifications = async () => {
   const userInfo = JSON.parse(
