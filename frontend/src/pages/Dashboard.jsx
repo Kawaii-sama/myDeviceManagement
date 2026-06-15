@@ -2,51 +2,55 @@ import { useEffect, useState } from "react"
 import { toast } from "react-toastify"
 
 import { getDevices, addDevice, deleteDevice, returnDevice } from "../services/deviceService"
-import { createRequest, getRequests, approveRequest, rejectRequest } from "../services/requestService"
+import { createRequest, getRequests, getMyRequests, approveRequest, rejectRequest } from "../services/requestService"
 import { getNotifications } from "../services/notificationService"
 
 function Dashboard() {
   const [devices, setDevices] = useState([])
   const [requests, setRequests] = useState([])
+  const [myRequests, setMyRequests] = useState([])
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
   const [model, setModel] = useState("")
-  const [deviceId, setDeviceId] = useState("")
+  const [deviceInputId, setDeviceInputId] = useState("")
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [activeTab, setActiveTab] = useState("devices") // "devices" | "requests" | "notifications"
+  const [activeTab, setActiveTab] = useState("devices")
 
   const userInfo = JSON.parse(localStorage.getItem("userInfo"))
   const isAdmin = userInfo?.role === "admin"
   const userId = userInfo?._id
 
-  // ─── Data fetching ───────────────────────────────────────────────
+  // ─── Fetch all data ───────────────────────────────────────────────
   const fetchAll = async () => {
-  try {
-    const deviceData = await getDevices()
-    setDevices(deviceData)
-  } catch (error) {
-    console.log("Devices error:", error)
-  }
-
-  try {
-    const notifData = await getNotifications()
-    setNotifications(notifData)
-  } catch (error) {
-    console.log("Notifications error:", error)
-  }
-
-  try {
-    if (isAdmin) {
-      const requestData = await getRequests()
-      setRequests(requestData)
+    try {
+      const deviceData = await getDevices()
+      setDevices(deviceData)
+    } catch (error) {
+      console.log("Devices error:", error)
     }
-  } catch (error) {
-    console.log("Requests error:", error)
-  }
 
-  setLoading(false)
-}
+    try {
+      const notifData = await getNotifications()
+      setNotifications(notifData)
+    } catch (error) {
+      console.log("Notifications error:", error)
+    }
+
+    try {
+      if (isAdmin) {
+        const requestData = await getRequests()
+        setRequests(requestData)
+      } else {
+        const myRequestData = await getMyRequests()
+        setMyRequests(myRequestData)
+      }
+    } catch (error) {
+      console.log("Requests error:", error)
+    }
+
+    setLoading(false)
+  }
 
   useEffect(() => {
     fetchAll()
@@ -67,9 +71,7 @@ function Dashboard() {
 
   // ─── Employee: Return assigned device ────────────────────────────
   const handleReturnDevice = async (deviceId) => {
-    const confirm = window.confirm("Return this device?")
-    if (!confirm) return
-
+    if (!window.confirm("Return this device?")) return
     try {
       await returnDevice(deviceId)
       toast.success("Device returned successfully")
@@ -82,13 +84,12 @@ function Dashboard() {
   // ─── Admin: Add device ───────────────────────────────────────────
   const handleAddDevice = async (e) => {
     e.preventDefault()
-    if (!model || !deviceId) return
-
+    if (!model || !deviceInputId) return
     try {
-      await addDevice({ model, deviceId })
+      await addDevice({ model, deviceId: deviceInputId })
       toast.success("Device added")
       setModel("")
-      setDeviceId("")
+      setDeviceInputId("")
       fetchAll()
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to add device")
@@ -98,7 +99,6 @@ function Dashboard() {
   // ─── Admin: Delete device ────────────────────────────────────────
   const handleDeleteDevice = async (id) => {
     if (!window.confirm("Delete this device?")) return
-
     try {
       await deleteDevice(id)
       toast.success("Device deleted")
@@ -135,12 +135,17 @@ function Dashboard() {
     const matchesSearch =
       device.model.toLowerCase().includes(search.toLowerCase()) ||
       device.deviceId.toLowerCase().includes(search.toLowerCase())
-
     const matchesStatus =
       statusFilter === "all" ? true : device.status === statusFilter
-
     return matchesSearch && matchesStatus
   })
+
+  // ─── Check if employee already has a pending request for a device ─
+  const hasMyPendingRequest = (deviceId) => {
+    return myRequests.some(
+      (r) => r.deviceId === deviceId && r.status === "pending"
+    )
+  }
 
   // ─── Status badge ─────────────────────────────────────────────────
   const StatusBadge = ({ status }) => {
@@ -148,7 +153,20 @@ function Dashboard() {
       available: "bg-green-100 text-green-700",
       pending: "bg-yellow-100 text-yellow-700",
       assigned: "bg-blue-100 text-blue-700",
-      "in-use": "bg-red-100 text-red-700",
+    }
+    return (
+      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${styles[status] || "bg-gray-100 text-gray-600"}`}>
+        {status}
+      </span>
+    )
+  }
+
+  // ─── Request status badge ─────────────────────────────────────────
+  const RequestBadge = ({ status }) => {
+    const styles = {
+      pending: "bg-yellow-100 text-yellow-700",
+      approved: "bg-green-100 text-green-700",
+      rejected: "bg-red-100 text-red-700",
     }
     return (
       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${styles[status] || "bg-gray-100 text-gray-600"}`}>
@@ -159,10 +177,9 @@ function Dashboard() {
 
   // ─── Device action button logic ──────────────────────────────────
   const DeviceAction = ({ device }) => {
-    // Admin: no request buttons, only delete
     if (isAdmin) return null
 
-    // This device is assigned to ME → show Return
+    // Assigned to ME → Return
     if (device.status === "assigned" && device.assignedTo === userId) {
       return (
         <button
@@ -174,7 +191,7 @@ function Dashboard() {
       )
     }
 
-    // Available → employee can request
+    // Available → Request
     if (device.status === "available") {
       return (
         <button
@@ -186,19 +203,33 @@ function Dashboard() {
       )
     }
 
-    // Pending / assigned to someone else → greyed out
+    // Pending or assigned to someone else
+    // Check if employee already queued for this
+    if (hasMyPendingRequest(device._id)) {
+      return (
+        <button
+          disabled
+          className="mt-4 w-full bg-yellow-50 text-yellow-600 border border-yellow-200 py-2 rounded-xl text-sm font-medium cursor-not-allowed"
+        >
+          ⏳ You're in the queue
+        </button>
+      )
+    }
+
+    // Not yet queued → Join Waitlist
     return (
       <button
-        disabled
-        className="mt-4 w-full bg-gray-100 text-gray-400 py-2 rounded-xl text-sm font-medium cursor-not-allowed"
+        onClick={() => handleRequestDevice(device._id)}
+        className="mt-4 w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-xl text-sm font-medium transition"
       >
-        {device.status === "pending" ? "Awaiting Approval" : "Assigned to " + (device.assignedToName || "someone")}
+        Join Waitlist
       </button>
     )
   }
 
-  // ─── Pending requests count badge ────────────────────────────────
+  // ─── Tab counts ───────────────────────────────────────────────────
   const pendingCount = requests.filter((r) => r.status === "pending").length
+  const myPendingCount = myRequests.filter((r) => r.status === "pending").length
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -208,7 +239,8 @@ function Dashboard() {
         <div>
           <h1 className="text-xl font-bold text-gray-800">Device Manager</h1>
           <p className="text-xs text-gray-400 mt-0.5">
-            Logged in as <span className="font-semibold text-gray-600">{userInfo?.name}</span>
+            Logged in as{" "}
+            <span className="font-semibold text-gray-600">{userInfo?.name}</span>
             <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${isAdmin ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
               {isAdmin ? "Admin" : "Employee"}
             </span>
@@ -246,7 +278,10 @@ function Dashboard() {
         <div className="flex gap-2 mb-6 border-b border-gray-200">
           {[
             { key: "devices", label: "Devices" },
-            ...(isAdmin ? [{ key: "requests", label: `Requests${pendingCount > 0 ? ` (${pendingCount})` : ""}` }] : []),
+            ...(isAdmin
+              ? [{ key: "requests", label: `Requests${pendingCount > 0 ? ` (${pendingCount})` : ""}` }]
+              : [{ key: "myrequests", label: `My Requests${myPendingCount > 0 ? ` (${myPendingCount})` : ""}` }]
+            ),
             { key: "notifications", label: `Notifications${notifications.length > 0 ? ` (${notifications.length})` : ""}` },
           ].map((tab) => (
             <button
@@ -268,7 +303,6 @@ function Dashboard() {
         ══════════════════════════════════════════════ */}
         {activeTab === "devices" && (
           <>
-            {/* Admin: Add Device form */}
             {isAdmin && (
               <form
                 onSubmit={handleAddDevice}
@@ -285,8 +319,8 @@ function Dashboard() {
                 <input
                   type="text"
                   placeholder="Device ID (e.g. MBP-001)"
-                  value={deviceId}
-                  onChange={(e) => setDeviceId(e.target.value)}
+                  value={deviceInputId}
+                  onChange={(e) => setDeviceInputId(e.target.value)}
                   className="border border-gray-300 p-3 rounded-xl flex-1 text-sm"
                   required
                 />
@@ -299,7 +333,6 @@ function Dashboard() {
               </form>
             )}
 
-            {/* Search + Filter */}
             <div className="flex flex-col md:flex-row gap-3 mb-6">
               <input
                 type="text"
@@ -320,7 +353,6 @@ function Dashboard() {
               </select>
             </div>
 
-            {/* Device Cards */}
             {loading ? (
               <p className="text-gray-400 text-sm">Loading devices...</p>
             ) : filteredDevices.length === 0 ? (
@@ -342,17 +374,15 @@ function Dashboard() {
                       <StatusBadge status={device.status} />
                     </div>
 
-                    {/* Show who has the device */}
-                    {(device.status === "assigned" || device.status === "pending") && device.assignedToName && (
+                    {/* Who has it */}
+                    {device.assignedToName && (
                       <div className="mt-3 bg-blue-50 rounded-xl px-3 py-2 text-xs text-blue-700">
-                        👤 {device.status === "assigned" ? "Assigned to" : "Requested by"}: <span className="font-semibold">{device.assignedToName}</span>
+                        👤 Assigned to: <span className="font-semibold">{device.assignedToName}</span>
                       </div>
                     )}
 
-                    {/* Employee action buttons */}
                     <DeviceAction device={device} />
 
-                    {/* Admin: delete button */}
                     {isAdmin && (
                       <button
                         onClick={() => handleDeleteDevice(device._id)}
@@ -369,7 +399,7 @@ function Dashboard() {
         )}
 
         {/* ══════════════════════════════════════════════
-            TAB: REQUESTS (Admin only)
+            TAB: ADMIN REQUESTS
         ══════════════════════════════════════════════ */}
         {activeTab === "requests" && isAdmin && (
           <div className="space-y-4">
@@ -386,7 +416,8 @@ function Dashboard() {
                   <div>
                     <p className="font-semibold text-gray-800">{req.deviceModel}</p>
                     <p className="text-sm text-gray-500 mt-1">
-                      Requested by <span className="font-medium text-gray-700">{req.employeeName}</span>
+                      Requested by{" "}
+                      <span className="font-medium text-gray-700">{req.employeeName}</span>
                     </p>
                     <p className="text-xs text-gray-400 mt-1">
                       {new Date(req.createdAt).toLocaleString()}
@@ -394,13 +425,7 @@ function Dashboard() {
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      req.status === "pending" ? "bg-yellow-100 text-yellow-700"
-                      : req.status === "approved" ? "bg-green-100 text-green-700"
-                      : "bg-red-100 text-red-700"
-                    }`}>
-                      {req.status}
-                    </span>
+                    <RequestBadge status={req.status} />
 
                     {req.status === "pending" && (
                       <>
@@ -419,6 +444,37 @@ function Dashboard() {
                       </>
                     )}
                   </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════
+            TAB: MY REQUESTS (Employee)
+        ══════════════════════════════════════════════ */}
+        {activeTab === "myrequests" && !isAdmin && (
+          <div className="space-y-4">
+            {myRequests.length === 0 ? (
+              <div className="bg-white rounded-2xl p-12 text-center shadow-sm">
+                <p className="text-gray-400">You haven't made any requests yet</p>
+                <p className="text-sm text-gray-400 mt-2">
+                  Go to the Devices tab and request a device
+                </p>
+              </div>
+            ) : (
+              myRequests.map((req) => (
+                <div
+                  key={req._id}
+                  className="bg-white p-5 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4"
+                >
+                  <div>
+                    <p className="font-semibold text-gray-800">{req.deviceModel}</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {new Date(req.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <RequestBadge status={req.status} />
                 </div>
               ))
             )}

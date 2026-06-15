@@ -3,6 +3,7 @@ const express = require("express")
 const {
   createRequest,
   getRequests,
+  getMyRequests,
   approveRequest,
   rejectRequest,
 } = require("../controllers/requestController")
@@ -14,31 +15,20 @@ const {
 
 const router = express.Router()
 
-router.post(
-  "/",
-  protect,
-  createRequest
-)
+// Employee: create a request
+router.post("/", protect, createRequest)
 
-router.get(
-  "/",
-  protect,
-  adminOnly,
-  getRequests
-)
+// Employee: get their own requests
+// IMPORTANT: this route must come BEFORE "/:id" routes
+router.get("/my", protect, getMyRequests)
 
-router.put(
-  "/:id/approve",
-  protect,
-  adminOnly,
-  approveRequest
-)
+// Admin: get all requests
+router.get("/", protect, adminOnly, getRequests)
 
-router.put(
-  "/:id/reject",
-  protect,
-  adminOnly,
-  rejectRequest
-)
+// Admin: approve a request
+router.put("/:id/approve", protect, adminOnly, approveRequest)
+
+// Admin: reject a request
+router.put("/:id/reject", protect, adminOnly, rejectRequest)
 
 module.exports = router
