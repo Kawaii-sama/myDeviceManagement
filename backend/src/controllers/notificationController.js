@@ -1,24 +1,20 @@
-const Notification = require(
-  "../models/notificationModel"
-)
+const Notification = require("../models/notificationModel")
 
-const getNotifications = async (
-  req,
-  res
-) => {
+// GET notifications for current user:
+// Returns public notifications (userId: null) + their own private ones
+const getNotifications = async (req, res) => {
   try {
-    const notifications =
-      await Notification.find()
-        .sort({ createdAt: -1 })
+    const notifications = await Notification.find({
+      $or: [
+        { userId: null },
+        { userId: req.user._id },
+      ],
+    }).sort({ createdAt: -1 })
 
     res.json(notifications)
   } catch (error) {
-    res.status(500).json({
-      message: error.message,
-    })
+    res.status(500).json({ message: error.message })
   }
 }
 
-module.exports = {
-  getNotifications,
-}
+module.exports = { getNotifications }
