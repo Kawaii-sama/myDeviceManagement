@@ -2,8 +2,12 @@ const express = require("express")
 
 const {
   createRequest,
+  createTransferRequest,
+  acceptTransfer,
+  declineTransfer,
   getRequests,
   getMyRequests,
+  getIncomingTransfers,
   approveRequest,
   rejectRequest,
 } = require("../controllers/requestController")
@@ -15,20 +19,21 @@ const {
 
 const router = express.Router()
 
-// Employee: create a request
+// Assignment requests
 router.post("/", protect, createRequest)
-
-// Employee: get their own requests
-// IMPORTANT: this route must come BEFORE "/:id" routes
-router.get("/my", protect, getMyRequests)
-
-// Admin: get all requests
 router.get("/", protect, adminOnly, getRequests)
 
-// Admin: approve a request
-router.put("/:id/approve", protect, adminOnly, approveRequest)
+// Must come before /:id routes
+router.get("/my", protect, getMyRequests)
+router.get("/incoming-transfers", protect, getIncomingTransfers)
 
-// Admin: reject a request
+// Transfer requests
+router.post("/transfer", protect, createTransferRequest)
+router.put("/:id/accept-transfer", protect, acceptTransfer)
+router.put("/:id/decline-transfer", protect, declineTransfer)
+
+// Admin approval
+router.put("/:id/approve", protect, adminOnly, approveRequest)
 router.put("/:id/reject", protect, adminOnly, rejectRequest)
 
 module.exports = router
