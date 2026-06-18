@@ -2,6 +2,12 @@ const mongoose = require("mongoose")
 
 const requestSchema = new mongoose.Schema(
   {
+    type: {
+      type: String,
+      enum: ["assignment", "transfer"],
+      default: "assignment",
+    },
+
     deviceId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Device",
@@ -13,6 +19,7 @@ const requestSchema = new mongoose.Schema(
       required: true,
     },
 
+    // Who is making the request
     employeeId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -24,13 +31,21 @@ const requestSchema = new mongoose.Schema(
       required: true,
     },
 
+    // For transfer requests — who is receiving the device
+    toEmployeeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    toEmployeeName: {
+      type: String,
+      default: "",
+    },
+
     status: {
       type: String,
-      enum: [
-        "pending",
-        "approved",
-        "rejected",
-      ],
+      enum: ["pending", "approved", "rejected"],
       default: "pending",
     },
   },
@@ -39,7 +54,4 @@ const requestSchema = new mongoose.Schema(
   }
 )
 
-module.exports = mongoose.model(
-  "Request",
-  requestSchema
-)
+module.exports = mongoose.model("Request", requestSchema)
