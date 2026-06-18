@@ -1,18 +1,39 @@
 import { useEffect, useState } from "react"
 import { toast } from "react-toastify"
+import axios from "axios"
 
 import { getDevices, addDevice, deleteDevice, returnDevice } from "../services/deviceService"
-import { createRequest, getRequests, getMyRequests, approveRequest, rejectRequest } from "../services/requestService"
+import {
+  createRequest,
+  createTransferRequest,
+  acceptTransfer,
+  declineTransfer,
+  getRequests,
+  getMyRequests,
+  getIncomingTransfers,
+  approveRequest,
+  rejectRequest,
+} from "../services/requestService"
 import { getNotifications } from "../services/notificationService"
 
 function Dashboard() {
   const [devices, setDevices] = useState([])
   const [requests, setRequests] = useState([])
   const [myRequests, setMyRequests] = useState([])
+  const [incomingTransfers, setIncomingTransfers] = useState([])
   const [notifications, setNotifications] = useState([])
+  const [allUsers, setAllUsers] = useState([])
   const [loading, setLoading] = useState(true)
+
+  // Add device form
   const [model, setModel] = useState("")
   const [deviceInputId, setDeviceInputId] = useState("")
+
+  // Transfer modal
+  const [transferDevice, setTransferDevice] = useState(null)
+  const [selectedEmployee, setSelectedEmployee] = useState("")
+
+  // Search + filter
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [activeTab, setActiveTab] = useState("devices")
@@ -21,32 +42,42 @@ function Dashboard() {
   const isAdmin = userInfo?.role === "admin"
   const userId = userInfo?._id
 
-  // ─── Fetch all data ───────────────────────────────────────────────
+  const getConfig = () => ({
+    headers: { Authorization: `Bearer ${userInfo.token}` },
+  })
+
+  // ─── Fetch everything ─────────────────────────────────────────────
   const fetchAll = async () => {
     try {
       const deviceData = await getDevices()
       setDevices(deviceData)
-    } catch (error) {
-      console.log("Devices error:", error)
-    }
+    } catch (e) { console.log("Devices error:", e) }
 
     try {
       const notifData = await getNotifications()
       setNotifications(notifData)
-    } catch (error) {
-      console.log("Notifications error:", error)
-    }
+    } catch (e) { console.log("Notifications error:", e) }
 
-    try {
-      if (isAdmin) {
+    if (isAdmin) {
+      try {
         const requestData = await getRequests()
         setRequests(requestData)
-      } else {
-        const myRequestData = await getMyRequests()
-        setMyRequests(myRequestData)
-      }
-    } catch (error) {
-      console.log("Requests error:", error)
+      } catch (e) { console.log("Requests error:", e) }
+
+      try {
+        const res = await axios.get("http://localhost:5000/api/auth/users", getConfig())
+        setAllUsers(res.data)
+      } catch (e) { console.log("Users error:", e) }
+    } else {
+      try {
+        const myReqData = await getMyRequests()
+        setMyRequests(myReqData)
+      } catch (e) { console.log("My requests error:", e) }
+
+      try {
+        const incoming = await getIncomingTransfers()
+        setIncomingTransfers(incoming)
+      } catch (e) { console.log("Incoming transfers error:", e) }
     }
 
     setLoading(false)
@@ -58,7 +89,8 @@ function Dashboard() {
     return () => clearInterval(interval)
   }, [])
 
-  // ─── Employee: Request a device ──────────────────────────────────
+  // ─── Handlers ─────────────────────────────────────────────────────
+
   const handleRequestDevice = async (deviceId) => {
     try {
       await createRequest(deviceId)
@@ -69,7 +101,6 @@ function Dashboard() {
     }
   }
 
-  // ─── Employee: Return assigned device ────────────────────────────
   const handleReturnDevice = async (deviceId) => {
     if (!window.confirm("Return this device?")) return
     try {
@@ -81,7 +112,42 @@ function Dashboard() {
     }
   }
 
-  // ─── Admin: Add device ───────────────────────────────────────────
+  const handleTransferSubmit = async () => {
+    if (!selectedEmployee) {
+      toast.error("Please select an employee")
+      return
+    }
+    try {
+      await createTransferRequest(transferDevice._id, selectedEmployee)
+      toast.success("Transfer request sent")
+      setTransferDevice(null)
+      setSelectedEmployee("")
+      fetchAll()
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Transfer failed")
+    }
+  }
+
+  const handleAcceptTransfer = async (requestId) => {
+    try {
+      await acceptTransfer(requestId)
+      toast.success("Transfer accepted — device is now yours")
+      fetchAll()
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Accept failed")
+    }
+  }
+
+  const handleDeclineTransfer = async (requestId) => {
+    try {
+      await declineTransfer(requestId)
+      toast.success("Transfer declined")
+      fetchAll()
+    } catch (error) {
+      toast.error("Decline failed")
+    }
+  }
+
   const handleAddDevice = async (e) => {
     e.preventDefault()
     if (!model || !deviceInputId) return
@@ -96,7 +162,6 @@ function Dashboard() {
     }
   }
 
-  // ─── Admin: Delete device ────────────────────────────────────────
   const handleDeleteDevice = async (id) => {
     if (!window.confirm("Delete this device?")) return
     try {
@@ -108,7 +173,6 @@ function Dashboard() {
     }
   }
 
-  // ─── Admin: Approve request ──────────────────────────────────────
   const handleApprove = async (requestId) => {
     try {
       await approveRequest(requestId)
@@ -119,7 +183,6 @@ function Dashboard() {
     }
   }
 
-  // ─── Admin: Reject request ───────────────────────────────────────
   const handleReject = async (requestId) => {
     try {
       await rejectRequest(requestId)
@@ -130,24 +193,20 @@ function Dashboard() {
     }
   }
 
-  // ─── Filtering ───────────────────────────────────────────────────
+  // ─── Helpers ──────────────────────────────────────────────────────
+
+  const hasMyPendingRequest = (deviceId) =>
+    myRequests.some((r) => r.deviceId === deviceId && r.status === "pending" && r.type === "assignment")
+
   const filteredDevices = devices.filter((device) => {
     const matchesSearch =
       device.model.toLowerCase().includes(search.toLowerCase()) ||
       device.deviceId.toLowerCase().includes(search.toLowerCase())
-    const matchesStatus =
-      statusFilter === "all" ? true : device.status === statusFilter
+    const matchesStatus = statusFilter === "all" ? true : device.status === statusFilter
     return matchesSearch && matchesStatus
   })
 
-  // ─── Check if employee already has a pending request for a device ─
-  const hasMyPendingRequest = (deviceId) => {
-    return myRequests.some(
-      (r) => r.deviceId === deviceId && r.status === "pending"
-    )
-  }
-
-  // ─── Status badge ─────────────────────────────────────────────────
+  // ─── Badges ───────────────────────────────────────────────────────
   const StatusBadge = ({ status }) => {
     const styles = {
       available: "bg-green-100 text-green-700",
@@ -155,13 +214,12 @@ function Dashboard() {
       assigned: "bg-blue-100 text-blue-700",
     }
     return (
-      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${styles[status] || "bg-gray-100 text-gray-600"}`}>
+      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${styles[status] || "bg-gray-100 text-gray-600"}`}>
         {status}
       </span>
     )
   }
 
-  // ─── Request status badge ─────────────────────────────────────────
   const RequestBadge = ({ status }) => {
     const styles = {
       pending: "bg-yellow-100 text-yellow-700",
@@ -169,67 +227,22 @@ function Dashboard() {
       rejected: "bg-red-100 text-red-700",
     }
     return (
-      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${styles[status] || "bg-gray-100 text-gray-600"}`}>
+      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${styles[status] || "bg-gray-100 text-gray-600"}`}>
         {status}
       </span>
-    )
-  }
-
-  // ─── Device action button logic ──────────────────────────────────
-  const DeviceAction = ({ device }) => {
-    if (isAdmin) return null
-
-    // Assigned to ME → Return
-    if (device.status === "assigned" && device.assignedTo === userId) {
-      return (
-        <button
-          onClick={() => handleReturnDevice(device._id)}
-          className="mt-4 w-full bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-xl text-sm font-medium transition"
-        >
-          Return Device
-        </button>
-      )
-    }
-
-    // Available → Request
-    if (device.status === "available") {
-      return (
-        <button
-          onClick={() => handleRequestDevice(device._id)}
-          className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-sm font-medium transition"
-        >
-          Request Device
-        </button>
-      )
-    }
-
-    // Pending or assigned to someone else
-    // Check if employee already queued for this
-    if (hasMyPendingRequest(device._id)) {
-      return (
-        <button
-          disabled
-          className="mt-4 w-full bg-yellow-50 text-yellow-600 border border-yellow-200 py-2 rounded-xl text-sm font-medium cursor-not-allowed"
-        >
-          ⏳ You're in the queue
-        </button>
-      )
-    }
-
-    // Not yet queued → Join Waitlist
-    return (
-      <button
-        onClick={() => handleRequestDevice(device._id)}
-        className="mt-4 w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-xl text-sm font-medium transition"
-      >
-        Join Waitlist
-      </button>
     )
   }
 
   // ─── Tab counts ───────────────────────────────────────────────────
   const pendingCount = requests.filter((r) => r.status === "pending").length
   const myPendingCount = myRequests.filter((r) => r.status === "pending").length
+  const incomingCount = incomingTransfers.length
+  const notifCount = notifications.length
+
+  // Other employees (not me) for transfer dropdown
+  const otherEmployees = allUsers.filter(
+    (u) => u.role === "employee"
+  )
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -257,7 +270,7 @@ function Dashboard() {
         </button>
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="max-w-5xl mx-auto px-6 py-8">
 
         {/* ── Stats ── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -275,14 +288,20 @@ function Dashboard() {
         </div>
 
         {/* ── Tabs ── */}
-        <div className="flex gap-2 mb-6 border-b border-gray-200">
+        <div className="flex gap-1 mb-6 border-b border-gray-200 flex-wrap">
           {[
             { key: "devices", label: "Devices" },
             ...(isAdmin
-              ? [{ key: "requests", label: `Requests${pendingCount > 0 ? ` (${pendingCount})` : ""}` }]
-              : [{ key: "myrequests", label: `My Requests${myPendingCount > 0 ? ` (${myPendingCount})` : ""}` }]
+              ? [
+                  { key: "requests", label: `Requests${pendingCount > 0 ? ` (${pendingCount})` : ""}` },
+                  { key: "users", label: `Users (${allUsers.length})` },
+                ]
+              : [
+                  { key: "myrequests", label: `My Requests${myPendingCount > 0 ? ` (${myPendingCount})` : ""}` },
+                  { key: "incoming", label: `Incoming${incomingCount > 0 ? ` (${incomingCount})` : ""}` },
+                ]
             ),
-            { key: "notifications", label: `Notifications${notifications.length > 0 ? ` (${notifications.length})` : ""}` },
+            { key: "notifications", label: `Notifications${notifCount > 0 ? ` (${notifCount})` : ""}` },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -306,7 +325,7 @@ function Dashboard() {
             {isAdmin && (
               <form
                 onSubmit={handleAddDevice}
-                className="bg-white p-5 rounded-2xl shadow-sm mb-6 flex flex-col md:flex-row gap-3"
+                className="bg-white p-4 rounded-2xl shadow-sm mb-4 flex flex-col md:flex-row gap-3"
               >
                 <input
                   type="text"
@@ -333,7 +352,8 @@ function Dashboard() {
               </form>
             )}
 
-            <div className="flex flex-col md:flex-row gap-3 mb-6">
+            {/* Search + Filter */}
+            <div className="flex flex-col md:flex-row gap-3 mb-4">
               <input
                 type="text"
                 placeholder="Search by model or ID..."
@@ -353,6 +373,7 @@ function Dashboard() {
               </select>
             </div>
 
+            {/* ── Device List ── */}
             {loading ? (
               <p className="text-gray-400 text-sm">Loading devices...</p>
             ) : filteredDevices.length === 0 ? (
@@ -360,37 +381,87 @@ function Dashboard() {
                 <p className="text-gray-400">No devices found</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                {filteredDevices.map((device) => (
+              <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                {/* List header */}
+                <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                  <div className="col-span-3">Model</div>
+                  <div className="col-span-2">Device ID</div>
+                  <div className="col-span-2">Status</div>
+                  <div className="col-span-3">Assigned To</div>
+                  <div className="col-span-2 text-right">Actions</div>
+                </div>
+
+                {filteredDevices.map((device, idx) => (
                   <div
                     key={device._id}
-                    className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-md transition"
+                    className={`grid grid-cols-12 gap-2 px-5 py-4 items-center text-sm ${
+                      idx !== filteredDevices.length - 1 ? "border-b border-gray-100" : ""
+                    }`}
                   >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h2 className="text-lg font-semibold text-gray-800">{device.model}</h2>
-                        <p className="text-xs text-gray-400 mt-1">ID: {device.deviceId}</p>
-                      </div>
-                      <StatusBadge status={device.status} />
+                    <div className="col-span-3 font-medium text-gray-800">{device.model}</div>
+                    <div className="col-span-2 text-gray-400 text-xs">{device.deviceId}</div>
+                    <div className="col-span-2"><StatusBadge status={device.status} /></div>
+                    <div className="col-span-3 text-gray-500 text-xs">
+                      {device.assignedToName || "—"}
                     </div>
 
-                    {/* Who has it */}
-                    {device.assignedToName && (
-                      <div className="mt-3 bg-blue-50 rounded-xl px-3 py-2 text-xs text-blue-700">
-                        👤 Assigned to: <span className="font-semibold">{device.assignedToName}</span>
-                      </div>
-                    )}
+                    {/* Actions */}
+                    <div className="col-span-2 flex gap-2 justify-end flex-wrap">
+                      {!isAdmin && (
+                        <>
+                          {/* Assigned to ME → Return + Transfer */}
+                          {device.status === "assigned" && device.assignedTo === userId && (
+                            <>
+                              <button
+                                onClick={() => handleReturnDevice(device._id)}
+                                className="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-1.5 rounded-lg text-xs font-medium transition"
+                              >
+                                Return
+                              </button>
+                              <button
+                                onClick={() => setTransferDevice(device)}
+                                className="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded-lg text-xs font-medium transition"
+                              >
+                                Transfer
+                              </button>
+                            </>
+                          )}
 
-                    <DeviceAction device={device} />
+                          {/* Available → Request */}
+                          {device.status === "available" && (
+                            <button
+                              onClick={() => handleRequestDevice(device._id)}
+                              className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-medium transition"
+                            >
+                              Request
+                            </button>
+                          )}
 
-                    {isAdmin && (
-                      <button
-                        onClick={() => handleDeleteDevice(device._id)}
-                        className="mt-3 w-full bg-gray-100 hover:bg-gray-200 text-gray-600 py-2 rounded-xl text-sm transition"
-                      >
-                        Delete Device
-                      </button>
-                    )}
+                          {/* Pending/assigned to someone else */}
+                          {(device.status === "pending" || (device.status === "assigned" && device.assignedTo !== userId)) && (
+                            hasMyPendingRequest(device._id) ? (
+                              <span className="text-yellow-600 text-xs font-medium">⏳ In queue</span>
+                            ) : (
+                              <button
+                                onClick={() => handleRequestDevice(device._id)}
+                                className="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded-lg text-xs font-medium transition"
+                              >
+                                Join Waitlist
+                              </button>
+                            )
+                          )}
+                        </>
+                      )}
+
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDeleteDevice(device._id)}
+                          className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg text-xs font-medium transition"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -399,84 +470,189 @@ function Dashboard() {
         )}
 
         {/* ══════════════════════════════════════════════
-            TAB: ADMIN REQUESTS
+            TAB: ADMIN — ALL REQUESTS
         ══════════════════════════════════════════════ */}
         {activeTab === "requests" && isAdmin && (
-          <div className="space-y-4">
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             {requests.length === 0 ? (
-              <div className="bg-white rounded-2xl p-12 text-center shadow-sm">
+              <div className="p-12 text-center">
                 <p className="text-gray-400">No requests yet</p>
               </div>
             ) : (
-              requests.map((req) => (
-                <div
-                  key={req._id}
-                  className="bg-white p-5 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4"
-                >
-                  <div>
-                    <p className="font-semibold text-gray-800">{req.deviceModel}</p>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Requested by{" "}
-                      <span className="font-medium text-gray-700">{req.employeeName}</span>
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {new Date(req.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <RequestBadge status={req.status} />
-
-                    {req.status === "pending" && (
-                      <>
-                        <button
-                          onClick={() => handleApprove(req._id)}
-                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => handleReject(req._id)}
-                          className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-medium transition"
-                        >
-                          Reject
-                        </button>
-                      </>
-                    )}
-                  </div>
+              <>
+                <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                  <div className="col-span-3">Device</div>
+                  <div className="col-span-3">Requested By</div>
+                  <div className="col-span-2">Date</div>
+                  <div className="col-span-2">Status</div>
+                  <div className="col-span-2 text-right">Actions</div>
                 </div>
-              ))
+                {requests.map((req, idx) => (
+                  <div
+                    key={req._id}
+                    className={`grid grid-cols-12 gap-2 px-5 py-4 items-center text-sm ${
+                      idx !== requests.length - 1 ? "border-b border-gray-100" : ""
+                    }`}
+                  >
+                    <div className="col-span-3 font-medium text-gray-800">{req.deviceModel}</div>
+                    <div className="col-span-3 text-gray-600">{req.employeeName}</div>
+                    <div className="col-span-2 text-gray-400 text-xs">
+                      {new Date(req.createdAt).toLocaleDateString()}
+                    </div>
+                    <div className="col-span-2"><RequestBadge status={req.status} /></div>
+                    <div className="col-span-2 flex gap-2 justify-end">
+                      {req.status === "pending" && (
+                        <>
+                          <button
+                            onClick={() => handleApprove(req._id)}
+                            className="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg text-xs font-medium transition"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleReject(req._id)}
+                            className="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-xs font-medium transition"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </>
             )}
           </div>
         )}
 
         {/* ══════════════════════════════════════════════
-            TAB: MY REQUESTS (Employee)
+            TAB: ADMIN — USER LIST
         ══════════════════════════════════════════════ */}
-        {activeTab === "myrequests" && !isAdmin && (
-          <div className="space-y-4">
-            {myRequests.length === 0 ? (
-              <div className="bg-white rounded-2xl p-12 text-center shadow-sm">
-                <p className="text-gray-400">You haven't made any requests yet</p>
-                <p className="text-sm text-gray-400 mt-2">
-                  Go to the Devices tab and request a device
-                </p>
+        {activeTab === "users" && isAdmin && (
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            {allUsers.length === 0 ? (
+              <div className="p-12 text-center">
+                <p className="text-gray-400">No users found</p>
               </div>
             ) : (
-              myRequests.map((req) => (
-                <div
-                  key={req._id}
-                  className="bg-white p-5 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4"
-                >
-                  <div>
-                    <p className="font-semibold text-gray-800">{req.deviceModel}</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {new Date(req.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-                  <RequestBadge status={req.status} />
+              <>
+                <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                  <div className="col-span-3">Name</div>
+                  <div className="col-span-4">Email</div>
+                  <div className="col-span-2">Role</div>
+                  <div className="col-span-3">Device Assigned</div>
                 </div>
-              ))
+                {allUsers.map((user, idx) => {
+                  const assignedDevice = devices.find(
+                    (d) => d.assignedTo === user._id
+                  )
+                  return (
+                    <div
+                      key={user._id}
+                      className={`grid grid-cols-12 gap-2 px-5 py-4 items-center text-sm ${
+                        idx !== allUsers.length - 1 ? "border-b border-gray-100" : ""
+                      }`}
+                    >
+                      <div className="col-span-3 font-medium text-gray-800">{user.name}</div>
+                      <div className="col-span-4 text-gray-500 text-xs">{user.email}</div>
+                      <div className="col-span-2">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                          user.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
+                        }`}>
+                          {user.role}
+                        </span>
+                      </div>
+                      <div className="col-span-3 text-gray-500 text-xs">
+                        {assignedDevice ? assignedDevice.model : "—"}
+                      </div>
+                    </div>
+                  )
+                })}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════
+            TAB: EMPLOYEE — MY REQUESTS
+        ══════════════════════════════════════════════ */}
+        {activeTab === "myrequests" && !isAdmin && (
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            {myRequests.length === 0 ? (
+              <div className="p-12 text-center">
+                <p className="text-gray-400">No requests yet</p>
+                <p className="text-sm text-gray-400 mt-1">Go to Devices tab to request one</p>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                  <div className="col-span-4">Device</div>
+                  <div className="col-span-3">Type</div>
+                  <div className="col-span-3">Date</div>
+                  <div className="col-span-2">Status</div>
+                </div>
+                {myRequests.map((req, idx) => (
+                  <div
+                    key={req._id}
+                    className={`grid grid-cols-12 gap-2 px-5 py-4 items-center text-sm ${
+                      idx !== myRequests.length - 1 ? "border-b border-gray-100" : ""
+                    }`}
+                  >
+                    <div className="col-span-4 font-medium text-gray-800">{req.deviceModel}</div>
+                    <div className="col-span-3 text-gray-500 text-xs capitalize">{req.type}</div>
+                    <div className="col-span-3 text-gray-400 text-xs">
+                      {new Date(req.createdAt).toLocaleDateString()}
+                    </div>
+                    <div className="col-span-2"><RequestBadge status={req.status} /></div>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════
+            TAB: EMPLOYEE — INCOMING TRANSFERS
+        ══════════════════════════════════════════════ */}
+        {activeTab === "incoming" && !isAdmin && (
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            {incomingTransfers.length === 0 ? (
+              <div className="p-12 text-center">
+                <p className="text-gray-400">No incoming transfers</p>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                  <div className="col-span-4">Device</div>
+                  <div className="col-span-4">From</div>
+                  <div className="col-span-4 text-right">Actions</div>
+                </div>
+                {incomingTransfers.map((req, idx) => (
+                  <div
+                    key={req._id}
+                    className={`grid grid-cols-12 gap-2 px-5 py-4 items-center text-sm ${
+                      idx !== incomingTransfers.length - 1 ? "border-b border-gray-100" : ""
+                    }`}
+                  >
+                    <div className="col-span-4 font-medium text-gray-800">{req.deviceModel}</div>
+                    <div className="col-span-4 text-gray-500">{req.employeeName}</div>
+                    <div className="col-span-4 flex gap-2 justify-end">
+                      <button
+                        onClick={() => handleAcceptTransfer(req._id)}
+                        className="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-lg text-xs font-medium transition"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        onClick={() => handleDeclineTransfer(req._id)}
+                        className="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-xs font-medium transition"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </>
             )}
           </div>
         )}
@@ -485,18 +661,20 @@ function Dashboard() {
             TAB: NOTIFICATIONS
         ══════════════════════════════════════════════ */}
         {activeTab === "notifications" && (
-          <div className="space-y-3">
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             {notifications.length === 0 ? (
-              <div className="bg-white rounded-2xl p-12 text-center shadow-sm">
+              <div className="p-12 text-center">
                 <p className="text-gray-400">No notifications yet</p>
               </div>
             ) : (
-              notifications.map((n) => (
+              notifications.map((n, idx) => (
                 <div
                   key={n._id}
-                  className="bg-white px-5 py-4 rounded-2xl shadow-sm flex justify-between items-center"
+                  className={`px-5 py-4 flex justify-between items-center text-sm ${
+                    idx !== notifications.length - 1 ? "border-b border-gray-100" : ""
+                  }`}
                 >
-                  <p className="text-sm text-gray-700">🔔 {n.message}</p>
+                  <p className="text-gray-700">🔔 {n.message}</p>
                   <p className="text-xs text-gray-400 ml-4 shrink-0">
                     {new Date(n.createdAt).toLocaleString()}
                   </p>
@@ -505,8 +683,58 @@ function Dashboard() {
             )}
           </div>
         )}
-
       </div>
+
+      {/* ══════════════════════════════════════════════
+          TRANSFER MODAL
+      ══════════════════════════════════════════════ */}
+      {transferDevice && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white w-full max-w-md p-6 rounded-2xl shadow-xl">
+            <h2 className="text-xl font-bold text-gray-800 mb-1">Transfer Device</h2>
+            <p className="text-sm text-gray-400 mb-6">
+              Transferring: <span className="font-medium text-gray-600">{transferDevice.model}</span>
+            </p>
+
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Employee to Transfer To
+            </label>
+            <select
+              value={selectedEmployee}
+              onChange={(e) => setSelectedEmployee(e.target.value)}
+              className="w-full border border-gray-300 p-3 rounded-xl text-sm mb-6"
+            >
+              <option value="">— Choose an employee —</option>
+              {otherEmployees
+                .filter((u) => u._id !== userId)
+                .map((u) => (
+                  <option key={u._id} value={u._id}>
+                    {u.name} ({u.email})
+                  </option>
+                ))}
+            </select>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleTransferSubmit}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-3 rounded-xl flex-1 text-sm font-medium transition"
+              >
+                Send Transfer Request
+              </button>
+              <button
+                onClick={() => {
+                  setTransferDevice(null)
+                  setSelectedEmployee("")
+                }}
+                className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-5 py-3 rounded-xl text-sm transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
