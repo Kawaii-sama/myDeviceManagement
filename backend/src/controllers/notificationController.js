@@ -1,12 +1,11 @@
 const Notification = require("../models/notificationModel")
 
-// GET notifications for current user:
-// Returns public notifications (userId: null) + their own private ones
 const getNotifications = async (req, res) => {
   try {
     const notifications = await Notification.find({
       $or: [
         { userId: null },
+        { userId: { $exists: false } }, // catches old notifications without userId field
         { userId: req.user._id },
       ],
     }).sort({ createdAt: -1 })
