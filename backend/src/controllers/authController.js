@@ -10,16 +10,15 @@ const generateToken = (id, role) => {
   )
 }
 
-// CREATE ADMIN
+// CREATE ADMIN — allows multiple admins
 const createAdmin = async (req, res) => {
   try {
-    const adminExists = await User.findOne({ role: "admin" })
-
-    if (adminExists) {
-      return res.status(400).json({ message: "Admin already exists" })
-    }
-
     const { name, email, password } = req.body
+
+    const exists = await User.findOne({ email })
+    if (exists) {
+      return res.status(400).json({ message: "User with this email already exists" })
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10)
 
@@ -101,22 +100,35 @@ const registerUser = async (req, res) => {
   }
 }
 
-// GET ALL USERS (admin only)
+// GET ALL USERS — admin only, for Users tab
 const getAllUsers = async (req, res) => {
   try {
     const users = await User.find()
       .select("-password")
       .sort({ createdAt: -1 })
-
     res.json(users)
   } catch (error) {
     res.status(500).json({ message: error.message })
   }
 }
 
+// GET ALL EMPLOYEES — any logged-in user, for transfer dropdown
+const getAllEmployees = async (req, res) => {
+  try {
+    const employees = await User.find({ role: "employee" })
+      .select("_id name email")
+      .sort({ name: 1 })
+    res.json(employees)
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+}
+
+
 module.exports = {
   createAdmin,
   loginUser,
   registerUser,
   getAllUsers,
+  getAllEmployees,
 }
