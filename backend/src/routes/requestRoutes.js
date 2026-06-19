@@ -3,11 +3,14 @@ const express = require("express")
 const {
   createRequest,
   createTransferRequest,
+  getIncomingRequests,
+  getIncomingTransfers,
+  approvePeerRequest,
+  declinePeerRequest,
   acceptTransfer,
   declineTransfer,
   getRequests,
   getMyRequests,
-  getIncomingTransfers,
   approveRequest,
   rejectRequest,
 } = require("../controllers/requestController")
@@ -19,20 +22,25 @@ const {
 
 const router = express.Router()
 
-// Assignment requests
+// ── Must come before /:id routes ──
+router.get("/my", protect, getMyRequests)
+router.get("/incoming-requests", protect, getIncomingRequests)
+router.get("/incoming-transfers", protect, getIncomingTransfers)
+
+// ── Assignment requests ──
 router.post("/", protect, createRequest)
 router.get("/", protect, adminOnly, getRequests)
 
-// Must come before /:id routes
-router.get("/my", protect, getMyRequests)
-router.get("/incoming-transfers", protect, getIncomingTransfers)
-
-// Transfer requests
+// ── Transfer requests ──
 router.post("/transfer", protect, createTransferRequest)
 router.put("/:id/accept-transfer", protect, acceptTransfer)
 router.put("/:id/decline-transfer", protect, declineTransfer)
 
-// Admin approval
+// ── Peer approve/decline (device owner) ──
+router.put("/:id/approve-peer", protect, approvePeerRequest)
+router.put("/:id/decline-peer", protect, declinePeerRequest)
+
+// ── Admin approve/reject ──
 router.put("/:id/approve", protect, adminOnly, approveRequest)
 router.put("/:id/reject", protect, adminOnly, rejectRequest)
 
