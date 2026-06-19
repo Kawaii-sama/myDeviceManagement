@@ -16,6 +16,8 @@ import {
 } from "../services/requestService"
 import { getNotifications } from "../services/notificationService"
 
+const BASE = "http://localhost:5000"
+
 function Dashboard() {
   const [devices, setDevices] = useState([])
   const [requests, setRequests] = useState([])
@@ -23,6 +25,7 @@ function Dashboard() {
   const [incomingTransfers, setIncomingTransfers] = useState([])
   const [notifications, setNotifications] = useState([])
   const [allUsers, setAllUsers] = useState([])
+  const [allEmployees, setAllEmployees] = useState([])
   const [loading, setLoading] = useState(true)
 
   // Add device form
@@ -58,6 +61,12 @@ function Dashboard() {
       setNotifications(notifData)
     } catch (e) { console.log("Notifications error:", e) }
 
+    // All employees for transfer dropdown (both admin and employee need this)
+    try {
+      const res = await axios.get(`${BASE}/api/auth/employees`, getConfig())
+      setAllEmployees(res.data)
+    } catch (e) { console.log("Employees error:", e) }
+
     if (isAdmin) {
       try {
         const requestData = await getRequests()
@@ -65,7 +74,7 @@ function Dashboard() {
       } catch (e) { console.log("Requests error:", e) }
 
       try {
-        const res = await axios.get("http://localhost:5000/api/auth/users", getConfig())
+        const res = await axios.get(`${BASE}/api/auth/users`, getConfig())
         setAllUsers(res.data)
       } catch (e) { console.log("Users error:", e) }
     } else {
@@ -193,16 +202,21 @@ function Dashboard() {
     }
   }
 
-  // ─── Helpers ──────────────────────────────────────────────────────
 
+  // ─── Helpers ──────────────────────────────────────────────────────
   const hasMyPendingRequest = (deviceId) =>
-    myRequests.some((r) => r.deviceId === deviceId && r.status === "pending" && r.type === "assignment")
+    myRequests.some(
+      (r) => r.deviceId === deviceId &&
+             r.status === "pending" &&
+             r.type === "assignment"
+    )
 
   const filteredDevices = devices.filter((device) => {
     const matchesSearch =
       device.model.toLowerCase().includes(search.toLowerCase()) ||
       device.deviceId.toLowerCase().includes(search.toLowerCase())
-    const matchesStatus = statusFilter === "all" ? true : device.status === statusFilter
+    const matchesStatus =
+      statusFilter === "all" ? true : device.status === statusFilter
     return matchesSearch && matchesStatus
   })
 
@@ -238,11 +252,6 @@ function Dashboard() {
   const myPendingCount = myRequests.filter((r) => r.status === "pending").length
   const incomingCount = incomingTransfers.length
   const notifCount = notifications.length
-
-  // Other employees (not me) for transfer dropdown
-  const otherEmployees = allUsers.filter(
-    (u) => u.role === "employee"
-  )
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -298,7 +307,7 @@ function Dashboard() {
                 ]
               : [
                   { key: "myrequests", label: `My Requests${myPendingCount > 0 ? ` (${myPendingCount})` : ""}` },
-                  { key: "incoming", label: `Incoming${incomingCount > 0 ? ` (${incomingCount})` : ""}` },
+                  { key: "incoming", label: `Incoming Transfers${incomingCount > 0 ? ` (${incomingCount})` : ""}` },
                 ]
             ),
             { key: "notifications", label: `Notifications${notifCount > 0 ? ` (${notifCount})` : ""}` },
@@ -352,7 +361,6 @@ function Dashboard() {
               </form>
             )}
 
-            {/* Search + Filter */}
             <div className="flex flex-col md:flex-row gap-3 mb-4">
               <input
                 type="text"
@@ -373,7 +381,6 @@ function Dashboard() {
               </select>
             </div>
 
-            {/* ── Device List ── */}
             {loading ? (
               <p className="text-gray-400 text-sm">Loading devices...</p>
             ) : filteredDevices.length === 0 ? (
@@ -382,7 +389,6 @@ function Dashboard() {
               </div>
             ) : (
               <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                {/* List header */}
                 <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-400 uppercase tracking-wide">
                   <div className="col-span-3">Model</div>
                   <div className="col-span-2">Device ID</div>
@@ -404,12 +410,9 @@ function Dashboard() {
                     <div className="col-span-3 text-gray-500 text-xs">
                       {device.assignedToName || "—"}
                     </div>
-
-                    {/* Actions */}
                     <div className="col-span-2 flex gap-2 justify-end flex-wrap">
                       {!isAdmin && (
                         <>
-                          {/* Assigned to ME → Return + Transfer */}
                           {device.status === "assigned" && device.assignedTo === userId && (
                             <>
                               <button
@@ -426,8 +429,6 @@ function Dashboard() {
                               </button>
                             </>
                           )}
-
-                          {/* Available → Request */}
                           {device.status === "available" && (
                             <button
                               onClick={() => handleRequestDevice(device._id)}
@@ -436,8 +437,6 @@ function Dashboard() {
                               Request
                             </button>
                           )}
-
-                          {/* Pending/assigned to someone else */}
                           {(device.status === "pending" || (device.status === "assigned" && device.assignedTo !== userId)) && (
                             hasMyPendingRequest(device._id) ? (
                               <span className="text-yellow-600 text-xs font-medium">⏳ In queue</span>
@@ -452,7 +451,6 @@ function Dashboard() {
                           )}
                         </>
                       )}
-
                       {isAdmin && (
                         <button
                           onClick={() => handleDeleteDevice(device._id)}
@@ -540,7 +538,8 @@ function Dashboard() {
                   <div className="col-span-3">Name</div>
                   <div className="col-span-4">Email</div>
                   <div className="col-span-2">Role</div>
-                  <div className="col-span-3">Device Assigned</div>
+                  <div className="col-span-2">Device</div>
+                  <div className="col-span-1 text-right">Actions</div>
                 </div>
                 {allUsers.map((user, idx) => {
                   const assignedDevice = devices.find(
@@ -557,13 +556,18 @@ function Dashboard() {
                       <div className="col-span-4 text-gray-500 text-xs">{user.email}</div>
                       <div className="col-span-2">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                          user.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
+                          user.role === "admin"
+                            ? "bg-purple-100 text-purple-700"
+                            : "bg-blue-100 text-blue-700"
                         }`}>
                           {user.role}
                         </span>
                       </div>
-                      <div className="col-span-3 text-gray-500 text-xs">
+                      <div className="col-span-2 text-gray-500 text-xs">
                         {assignedDevice ? assignedDevice.model : "—"}
+                      </div>
+                      <div className="col-span-1 flex justify-end">
+                        {user.role === "employee"}
                       </div>
                     </div>
                   )
@@ -619,6 +623,9 @@ function Dashboard() {
             {incomingTransfers.length === 0 ? (
               <div className="p-12 text-center">
                 <p className="text-gray-400">No incoming transfers</p>
+                <p className="text-sm text-gray-400 mt-1">
+                  When someone transfers a device to you, it appears here
+                </p>
               </div>
             ) : (
               <>
@@ -705,7 +712,7 @@ function Dashboard() {
               className="w-full border border-gray-300 p-3 rounded-xl text-sm mb-6"
             >
               <option value="">— Choose an employee —</option>
-              {otherEmployees
+              {allEmployees
                 .filter((u) => u._id !== userId)
                 .map((u) => (
                   <option key={u._id} value={u._id}>
@@ -734,7 +741,6 @@ function Dashboard() {
           </div>
         </div>
       )}
-
     </div>
   )
 }
