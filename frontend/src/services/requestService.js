@@ -1,6 +1,6 @@
 import axios from "axios"
 
-const API_URL = "http://localhost:5000"
+const API_URL = "http://localhost:5000/requests"
 
 const getConfig = () => {
   const userInfo = JSON.parse(localStorage.getItem("userInfo"))
