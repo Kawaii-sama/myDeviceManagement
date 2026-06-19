@@ -3,7 +3,7 @@ const Device = require("../models/deviceModel")
 const Notification = require("../models/notificationModel")
 const User = require("../models/userModel")
 
-// ─── ASSIGNMENT REQUEST (employee → admin approves) ───────────────
+// ─── ASSIGNMENT REQUEST (employee → admin approves for available, owner approves for assigned) ───
 const createRequest = async (req, res) => {
   try {
     const device = await Device.findById(req.body.deviceId)
@@ -12,7 +12,7 @@ const createRequest = async (req, res) => {
       return res.status(404).json({ message: "Device not found" })
     }
 
-    // Block duplicate pending assignment request from same employee
+    // Block duplicate pending request from same employee for same device
     const existingRequest = await Request.findOne({
       deviceId: device._id,
       employeeId: req.user._id,
@@ -26,7 +26,8 @@ const createRequest = async (req, res) => {
       })
     }
 
-    // Only change device status if it was available
+    // If device is available → goes to admin for approval
+    // If device is assigned → goes to current owner for approval
     if (device.status === "available") {
       device.status = "pending"
       await device.save()
@@ -38,7 +39,18 @@ const createRequest = async (req, res) => {
       deviceModel: device.model,
       employeeId: req.user._id,
       employeeName: req.user.name,
+      // Store current owner so they can approve peer requests
+      toEmployeeId: device.assignedTo || null,
+      toEmployeeName: device.assignedToName || "",
     })
+
+    // If device is assigned to someone, notify that person privately
+    if (device.assignedTo) {
+      await Notification.create({
+        message: `${req.user.name} requested your ${device.model}`,
+        userId: device.assignedTo,
+      })
+    }
 
     res.status(201).json(request)
   } catch (error) {
@@ -57,7 +69,6 @@ const createTransferRequest = async (req, res) => {
       return res.status(404).json({ message: "Device not found" })
     }
 
-    // Only the person who has the device can transfer it
     if (device.assignedTo?.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         message: "You can only transfer a device assigned to you",
@@ -70,7 +81,6 @@ const createTransferRequest = async (req, res) => {
       return res.status(404).json({ message: "Employee not found" })
     }
 
-    // Block duplicate pending transfer for same device
     const existingTransfer = await Request.findOne({
       deviceId: device._id,
       status: "pending",
@@ -93,7 +103,7 @@ const createTransferRequest = async (req, res) => {
       toEmployeeName: toEmployee.name,
     })
 
-    // Private notification to the receiving employee
+    // Private notification to recipient
     await Notification.create({
       message: `${req.user.name} wants to transfer ${device.model} to you`,
       userId: toEmployee._id,
@@ -105,7 +115,130 @@ const createTransferRequest = async (req, res) => {
   }
 }
 
-// ─── ACCEPT TRANSFER (Employee B accepts) ────────────────────────
+// ─── GET INCOMING REQUESTS (devices I own that others want) ───────
+const getIncomingRequests = async (req, res) => {
+  try {
+    // Find all pending assignment requests for devices assigned to me
+    const myDevices = await Device.find({ assignedTo: req.user._id })
+    const myDeviceIds = myDevices.map((d) => d._id)
+
+    const requests = await Request.find({
+      deviceId: { $in: myDeviceIds },
+      type: "assignment",
+      status: "pending",
+      employeeId: { $ne: req.user._id }, // not my own requests
+    }).sort({ createdAt: -1 })
+
+    res.json(requests)
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+}
+
+// ─── GET INCOMING TRANSFERS (someone wants to give me their device) ─
+const getIncomingTransfers = async (req, res) => {
+  try {
+    const requests = await Request.find({
+      toEmployeeId: req.user._id,
+      type: "transfer",
+      status: "pending",
+    }).sort({ createdAt: -1 })
+    res.json(requests)
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+}
+
+// ─── APPROVE PEER REQUEST (device owner approves someone's request) ─
+const approvePeerRequest = async (req, res) => {
+  try {
+    const request = await Request.findById(req.params.id)
+
+    if (!request) {
+      return res.status(404).json({ message: "Request not found" })
+    }
+
+    if (request.status !== "pending") {
+      return res.status(400).json({ message: "Request is no longer pending" })
+    }
+
+    const device = await Device.findById(request.deviceId)
+
+    if (!device) {
+      return res.status(404).json({ message: "Device not found" })
+    }
+
+    // Confirm the approver actually owns this device
+    if (device.assignedTo?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        message: "You can only approve requests for your own device",
+      })
+    }
+
+    // Transfer device to requester
+    device.status = "assigned"
+    device.assignedTo = request.employeeId
+    device.assignedToName = request.employeeName
+    await device.save()
+
+    request.status = "approved"
+    await request.save()
+
+    // Reject all other pending requests for this device
+    await Request.updateMany(
+      {
+        deviceId: device._id,
+        _id: { $ne: request._id },
+        status: "pending",
+      },
+      { status: "rejected" }
+    )
+
+    // Private notification to the person who requested
+    await Notification.create({
+      message: `Your request for ${device.model} was approved — it's now yours`,
+      userId: request.employeeId,
+    })
+
+    res.json({ message: "Request approved, device transferred", request, device })
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+}
+
+// ─── DECLINE PEER REQUEST (device owner declines) ─────────────────
+const declinePeerRequest = async (req, res) => {
+  try {
+    const request = await Request.findById(req.params.id)
+
+    if (!request) {
+      return res.status(404).json({ message: "Request not found" })
+    }
+
+    const device = await Device.findById(request.deviceId)
+
+    if (device && device.assignedTo?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        message: "You can only decline requests for your own device",
+      })
+    }
+
+    request.status = "rejected"
+    await request.save()
+
+    // Private notification to requester
+    await Notification.create({
+      message: `Your request for ${request.deviceModel} was declined`,
+      userId: request.employeeId,
+    })
+
+    res.json({ message: "Request declined", request })
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+}
+
+// ─── ACCEPT TRANSFER (Employee B accepts device from A) ───────────
 const acceptTransfer = async (req, res) => {
   try {
     const request = await Request.findById(req.params.id)
@@ -114,7 +247,6 @@ const acceptTransfer = async (req, res) => {
       return res.status(404).json({ message: "Transfer request not found" })
     }
 
-    // Only the intended recipient can accept
     if (request.toEmployeeId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         message: "Only the intended recipient can accept this transfer",
@@ -131,7 +263,6 @@ const acceptTransfer = async (req, res) => {
       return res.status(404).json({ message: "Device not found" })
     }
 
-    // Transfer the device
     device.assignedTo = request.toEmployeeId
     device.assignedToName = request.toEmployeeName
     device.status = "assigned"
@@ -140,7 +271,7 @@ const acceptTransfer = async (req, res) => {
     request.status = "approved"
     await request.save()
 
-    // Private notification to the person who initiated the transfer
+    // Private notification to sender
     await Notification.create({
       message: `${request.toEmployeeName} accepted your transfer of ${device.model}`,
       userId: request.employeeId,
@@ -152,7 +283,7 @@ const acceptTransfer = async (req, res) => {
   }
 }
 
-// ─── DECLINE TRANSFER (Employee B declines) ──────────────────────
+// ─── DECLINE TRANSFER (Employee B declines) ───────────────────────
 const declineTransfer = async (req, res) => {
   try {
     const request = await Request.findById(req.params.id)
@@ -170,7 +301,6 @@ const declineTransfer = async (req, res) => {
     request.status = "rejected"
     await request.save()
 
-    // Private notification back to sender
     await Notification.create({
       message: `${request.toEmployeeName} declined your transfer of ${request.deviceModel}`,
       userId: request.employeeId,
@@ -205,20 +335,6 @@ const getMyRequests = async (req, res) => {
   }
 }
 
-// ─── GET INCOMING TRANSFERS (requests where I am the recipient) ───
-const getIncomingTransfers = async (req, res) => {
-  try {
-    const requests = await Request.find({
-      toEmployeeId: req.user._id,
-      type: "transfer",
-      status: "pending",
-    }).sort({ createdAt: -1 })
-    res.json(requests)
-  } catch (error) {
-    res.status(500).json({ message: error.message })
-  }
-}
-
 // ─── APPROVE ASSIGNMENT REQUEST (admin only) ──────────────────────
 const approveRequest = async (req, res) => {
   try {
@@ -246,17 +362,13 @@ const approveRequest = async (req, res) => {
     device.assignedToName = request.employeeName
     await device.save()
 
-    // Private notification — only the assigned employee sees this
+    // Private notification — only assigned employee sees this
     await Notification.create({
       message: `${device.model} has been assigned to you`,
       userId: request.employeeId,
     })
 
-    res.json({
-      message: "Request approved and device assigned",
-      request,
-      device,
-    })
+    res.json({ message: "Request approved and device assigned", request, device })
   } catch (error) {
     res.status(500).json({ message: error.message })
   }
@@ -274,7 +386,6 @@ const rejectRequest = async (req, res) => {
     request.status = "rejected"
     await request.save()
 
-    // If no more pending requests for this device, make it available again
     const remainingPending = await Request.findOne({
       deviceId: request.deviceId,
       status: "pending",
@@ -296,11 +407,14 @@ const rejectRequest = async (req, res) => {
 module.exports = {
   createRequest,
   createTransferRequest,
+  getIncomingRequests,
+  getIncomingTransfers,
+  approvePeerRequest,
+  declinePeerRequest,
   acceptTransfer,
   declineTransfer,
   getRequests,
   getMyRequests,
-  getIncomingTransfers,
   approveRequest,
   rejectRequest,
 }
