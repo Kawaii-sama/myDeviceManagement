@@ -11,6 +11,7 @@ import {
   getRequests, approveRequest, rejectRequest,
 } from "../services/requestService"
 import { getNotifications } from "../services/notificationService"
+import { getEntries, addEntry, editEntry, deleteEntry } from "../services/entryService"
 
 const BASE = "http://localhost:5000"
 
@@ -23,13 +24,34 @@ function Dashboard() {
   const [notifications, setNotifications] = useState([])
   const [allUsers, setAllUsers] = useState([])
   const [allEmployees, setAllEmployees] = useState([])
+  const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
+
+  // Device form
   const [model, setModel] = useState("")
   const [deviceInputId, setDeviceInputId] = useState("")
+
+  // Transfer modal
   const [transferDevice, setTransferDevice] = useState(null)
   const [selectedEmployee, setSelectedEmployee] = useState("")
+
+  // Device search/filter
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+
+  // Entry form
+  const [entryApp, setEntryApp] = useState("")
+  const [entryUserId, setEntryUserId] = useState("")
+  const [entryPassword, setEntryPassword] = useState("")
+  const [entrySearch, setEntrySearch] = useState("")
+  const [showEntryPasswords, setShowEntryPasswords] = useState({})
+
+  // Edit entry modal
+  const [editingEntry, setEditingEntry] = useState(null)
+  const [editApp, setEditApp] = useState("")
+  const [editUserId, setEditUserId] = useState("")
+  const [editPassword, setEditPassword] = useState("")
+
   const [activeTab, setActiveTab] = useState("devices")
   const [dark, setDark] = useState(() => localStorage.getItem("theme") === "dark")
 
@@ -52,7 +74,7 @@ function Dashboard() {
     }
   }, [dark])
 
-  // ─── Fetch all data ───────────────────────────────────────────────
+  // ─── Fetch all ────────────────────────────────────────────────────
   const fetchAll = async () => {
     try { setDevices(await getDevices()) } catch (e) { console.log(e) }
     try { setNotifications(await getNotifications()) } catch (e) { console.log(e) }
@@ -67,6 +89,7 @@ function Dashboard() {
         const res = await axios.get(`${BASE}/api/auth/users`, getConfig())
         setAllUsers(res.data)
       } catch (e) { console.log(e) }
+      try { setEntries(await getEntries()) } catch (e) { console.log(e) }
     } else {
       try { setMyRequests(await getMyRequests()) } catch (e) { console.log(e) }
       try { setIncomingRequests(await getIncomingRequests()) } catch (e) { console.log(e) }
@@ -81,7 +104,7 @@ function Dashboard() {
     return () => clearInterval(interval)
   }, [])
 
-  // ─── Handlers ─────────────────────────────────────────────────────
+  // ─── Device handlers ──────────────────────────────────────────────
   const handleRequestDevice = async (deviceId) => {
     try { await createRequest(deviceId); toast.success("Request sent"); fetchAll() }
     catch (e) { toast.error(e.response?.data?.message || "Request failed") }
@@ -100,7 +123,7 @@ function Dashboard() {
     } catch (e) { toast.error(e.response?.data?.message || "Transfer failed") }
   }
   const handleApprovePeer = async (id) => {
-    try { await approvePeerRequest(id); toast.success("Approved — device transferred"); fetchAll() }
+    try { await approvePeerRequest(id); toast.success("Approved"); fetchAll() }
     catch (e) { toast.error(e.response?.data?.message || "Failed") }
   }
   const handleDeclinePeer = async (id) => {
@@ -134,34 +157,93 @@ function Dashboard() {
     catch (e) { toast.error("Failed") }
   }
 
-  // ─── Helpers ──────────────────────────────────────────────────────
+  // ─── Entry handlers ───────────────────────────────────────────────
+  const handleAddEntry = async (e) => {
+    e.preventDefault()
+    try {
+      await addEntry({ application: entryApp, userId: entryUserId, password: entryPassword })
+      toast.success("Entry added")
+      setEntryApp(""); setEntryUserId(""); setEntryPassword("")
+      fetchAll()
+    } catch (e) { toast.error(e.response?.data?.message || "Failed to add entry") }
+  }
+
+  const openEditEntry = (entry) => {
+    setEditingEntry(entry)
+    setEditApp(entry.application)
+    setEditUserId(entry.userId)
+    setEditPassword(entry.password)
+  }
+
+  const handleEditEntry = async () => {
+    try {
+      await editEntry(editingEntry._id, {
+        application: editApp,
+        userId: editUserId,
+        password: editPassword,
+      })
+      toast.success("Entry updated")
+      setEditingEntry(null)
+      fetchAll()
+    } catch (e) { toast.error("Failed to update entry") }
+  }
+
+  const handleDeleteEntry = async (id) => {
+    if (!window.confirm("Delete this entry?")) return
+    try { await deleteEntry(id); toast.success("Entry deleted"); fetchAll() }
+    catch (e) { toast.error("Failed to delete entry") }
+  }
+
+  const toggleShowPassword = (id) => {
+    setShowEntryPasswords((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  // ─── Filtered entries ─────────────────────────────────────────────
+  const filteredEntries = entries.filter((e) => {
+    const s = entrySearch.toLowerCase()
+    return (
+      e.application.toLowerCase().includes(s) ||
+      e.userId.toLowerCase().includes(s)
+    )
+  })
+
+  // ─── Device helpers ───────────────────────────────────────────────
   const hasMyPendingRequest = (deviceId) =>
     myRequests.some((r) => r.deviceId === deviceId && r.status === "pending" && r.type === "assignment")
 
   const filteredDevices = devices.filter((d) => {
     const s = search.toLowerCase()
-    const matchSearch = d.model.toLowerCase().includes(s) || d.deviceId.toLowerCase().includes(s)
-    const matchStatus = statusFilter === "all" || d.status === statusFilter
-    return matchSearch && matchStatus
+    return (
+      (d.model.toLowerCase().includes(s) || d.deviceId.toLowerCase().includes(s)) &&
+      (statusFilter === "all" || d.status === statusFilter)
+    )
   })
 
-  // ─── Reusable classes ─────────────────────────────────────────────
+  // ─── Shared classes ───────────────────────────────────────────────
   const card = "bg-white dark:bg-slate-800 rounded-2xl shadow-sm"
   const headerRow = "grid gap-2 px-5 py-3 bg-gray-50 dark:bg-slate-700 border-b border-gray-100 dark:border-slate-600 text-xs font-semibold text-gray-400 dark:text-slate-400 uppercase tracking-wide"
   const bodyRow = "grid gap-2 px-5 py-4 items-center text-sm border-b border-gray-100 dark:border-slate-700 last:border-0"
   const inputClass = "border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-800 dark:text-white placeholder-gray-400 p-3 rounded-xl text-sm w-full"
 
   const StatusBadge = ({ status }) => {
-    const s = { available: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300", pending: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300", assigned: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" }
+    const s = {
+      available: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
+      pending: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300",
+      assigned: "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300",
+    }
     return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${s[status] || "bg-gray-100 text-gray-600"}`}>{status}</span>
   }
 
   const ReqBadge = ({ status }) => {
-    const s = { pending: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300", approved: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300", rejected: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" }
+    const s = {
+      pending: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300",
+      approved: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
+      rejected: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300",
+    }
     return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${s[status] || "bg-gray-100 text-gray-600"}`}>{status}</span>
   }
 
-  // ─── Tab config ───────────────────────────────────────────────────
+  // ─── Tabs ─────────────────────────────────────────────────────────
   const pendingAdminCount = requests.filter((r) => r.status === "pending").length
   const myPendingCount = myRequests.filter((r) => r.status === "pending").length
   const totalIncoming = incomingRequests.length + incomingTransfers.length
@@ -171,6 +253,7 @@ function Dashboard() {
         { key: "devices", label: "Devices" },
         { key: "requests", label: `Requests${pendingAdminCount > 0 ? ` (${pendingAdminCount})` : ""}` },
         { key: "users", label: `Users (${allUsers.length})` },
+        { key: "entries", label: `🔐 Credentials` },
         { key: "notifications", label: `Notifications${notifications.length > 0 ? ` (${notifications.length})` : ""}` },
       ]
     : [
@@ -189,22 +272,16 @@ function Dashboard() {
           <h1 className="text-xl font-bold text-gray-800 dark:text-white">Device Manager</h1>
           <p className="text-xs text-gray-400 dark:text-slate-400 mt-0.5">
             Logged in as <span className="font-semibold text-gray-600 dark:text-slate-300">{userInfo?.name}</span>
-            <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${isAdmin ? "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300" : "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"}`}>
+            <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${isAdmin ? "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300" : "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"}`}>
               {isAdmin ? "Admin" : "Employee"}
             </span>
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setDark(!dark)}
-            className="bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 px-3 py-2 rounded-xl text-sm font-medium transition"
-          >
+          <button onClick={() => setDark(!dark)} className="bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 px-3 py-2 rounded-xl text-sm font-medium transition">
             {dark ? "☀️ Light" : "🌙 Dark"}
           </button>
-          <button
-            onClick={() => { localStorage.removeItem("userInfo"); window.location.href = "/" }}
-            className="bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 px-4 py-2 rounded-xl text-sm font-medium transition"
-          >
+          <button onClick={() => { localStorage.removeItem("userInfo"); window.location.href = "/" }} className="bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 px-4 py-2 rounded-xl text-sm font-medium transition">
             Logout
           </button>
         </div>
@@ -230,9 +307,7 @@ function Dashboard() {
         {/* ── Tabs ── */}
         <div className="flex gap-1 mb-6 border-b border-gray-200 dark:border-slate-700 flex-wrap">
           {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+            <button key={tab.key} onClick={() => setActiveTab(tab.key)}
               className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${
                 activeTab === tab.key
                   ? "bg-white dark:bg-slate-800 border border-b-white dark:border-b-slate-800 border-gray-200 dark:border-slate-700 text-blue-600 dark:text-blue-400 -mb-px"
@@ -256,7 +331,6 @@ function Dashboard() {
                 <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl text-sm font-medium transition whitespace-nowrap">Add Device</button>
               </form>
             )}
-
             <div className="flex flex-col md:flex-row gap-3 mb-4">
               <input type="text" placeholder="Search by model or ID..." value={search} onChange={(e) => setSearch(e.target.value)} className={inputClass} />
               <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={`${inputClass} w-auto`}>
@@ -266,53 +340,50 @@ function Dashboard() {
                 <option value="assigned">Assigned</option>
               </select>
             </div>
-
-            {loading ? (
-              <p className="text-gray-400 text-sm">Loading...</p>
-            ) : filteredDevices.length === 0 ? (
-              <div className={`${card} p-12 text-center`}><p className="text-gray-400">No devices found</p></div>
-            ) : (
-              <div className={`${card} overflow-hidden`}>
-                <div className={`${headerRow} grid-cols-12`}>
-                  <div className="col-span-3">Model</div>
-                  <div className="col-span-2">Device ID</div>
-                  <div className="col-span-2">Status</div>
-                  <div className="col-span-3">Assigned To</div>
-                  <div className="col-span-2 text-right">Actions</div>
-                </div>
-                {filteredDevices.map((device) => (
-                  <div key={device._id} className={`${bodyRow} grid-cols-12`}>
-                    <div className="col-span-3 font-medium text-gray-800 dark:text-white">{device.model}</div>
-                    <div className="col-span-2 text-gray-400 dark:text-slate-400 text-xs">{device.deviceId}</div>
-                    <div className="col-span-2"><StatusBadge status={device.status} /></div>
-                    <div className="col-span-3 text-gray-500 dark:text-slate-400 text-xs">{device.assignedToName || "—"}</div>
-                    <div className="col-span-2 flex gap-2 justify-end flex-wrap">
-                      {!isAdmin && (
-                        <>
-                          {device.status === "assigned" && device.assignedTo === userId && (
+            {loading ? <p className="text-gray-400 text-sm">Loading...</p>
+              : filteredDevices.length === 0
+                ? <div className={`${card} p-12 text-center`}><p className="text-gray-400">No devices found</p></div>
+                : (
+                  <div className={`${card} overflow-hidden`}>
+                    <div className={`${headerRow} grid-cols-12`}>
+                      <div className="col-span-3">Model</div><div className="col-span-2">Device ID</div>
+                      <div className="col-span-2">Status</div><div className="col-span-3">Assigned To</div>
+                      <div className="col-span-2 text-right">Actions</div>
+                    </div>
+                    {filteredDevices.map((device) => (
+                      <div key={device._id} className={`${bodyRow} grid-cols-12`}>
+                        <div className="col-span-3 font-medium text-gray-800 dark:text-white">{device.model}</div>
+                        <div className="col-span-2 text-gray-400 dark:text-slate-400 text-xs">{device.deviceId}</div>
+                        <div className="col-span-2"><StatusBadge status={device.status} /></div>
+                        <div className="col-span-3 text-gray-500 dark:text-slate-400 text-xs">{device.assignedToName || "—"}</div>
+                        <div className="col-span-2 flex gap-2 justify-end flex-wrap">
+                          {!isAdmin && (
                             <>
-                              <button onClick={() => handleReturnDevice(device._id)} className="bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/40 dark:hover:bg-orange-900/60 text-orange-700 dark:text-orange-400 px-3 py-1.5 rounded-lg text-xs font-medium transition">Return</button>
-                              <button onClick={() => setTransferDevice(device)} className="bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/40 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-400 px-3 py-1.5 rounded-lg text-xs font-medium transition">Transfer</button>
+                              {device.status === "assigned" && device.assignedTo === userId && (
+                                <>
+                                  <button onClick={() => handleReturnDevice(device._id)} className="bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400 px-3 py-1.5 rounded-lg text-xs font-medium transition">Return</button>
+                                  <button onClick={() => setTransferDevice(device)} className="bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 px-3 py-1.5 rounded-lg text-xs font-medium transition">Transfer</button>
+                                </>
+                              )}
+                              {device.status === "available" && (
+                                <button onClick={() => handleRequestDevice(device._id)} className="bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-lg text-xs font-medium transition">Request</button>
+                              )}
+                              {(device.status === "pending" || (device.status === "assigned" && device.assignedTo !== userId)) && (
+                                hasMyPendingRequest(device._id)
+                                  ? <span className="text-yellow-600 dark:text-yellow-400 text-xs font-medium">⏳ In queue</span>
+                                  : <button onClick={() => handleRequestDevice(device._id)} className="bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 px-3 py-1.5 rounded-lg text-xs font-medium transition">Join Waitlist</button>
+                              )}
                             </>
                           )}
-                          {device.status === "available" && (
-                            <button onClick={() => handleRequestDevice(device._id)} className="bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-lg text-xs font-medium transition">Request</button>
+                          {isAdmin && (
+                            <button onClick={() => handleDeleteDevice(device._id)} className="bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-600 dark:text-slate-300 px-3 py-1.5 rounded-lg text-xs font-medium transition">Delete</button>
                           )}
-                          {(device.status === "pending" || (device.status === "assigned" && device.assignedTo !== userId)) && (
-                            hasMyPendingRequest(device._id)
-                              ? <span className="text-yellow-600 dark:text-yellow-400 text-xs font-medium">⏳ In queue</span>
-                              : <button onClick={() => handleRequestDevice(device._id)} className="bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/40 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-400 px-3 py-1.5 rounded-lg text-xs font-medium transition">Join Waitlist</button>
-                          )}
-                        </>
-                      )}
-                      {isAdmin && (
-                        <button onClick={() => handleDeleteDevice(device._id)} className="bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-600 dark:text-slate-300 px-3 py-1.5 rounded-lg text-xs font-medium transition">Delete</button>
-                      )}
-                    </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                )
+            }
           </>
         )}
 
@@ -369,7 +440,7 @@ function Dashboard() {
                         <div className="col-span-3 font-medium text-gray-800 dark:text-white">{user.name}</div>
                         <div className="col-span-4 text-gray-500 dark:text-slate-400 text-xs">{user.email}</div>
                         <div className="col-span-2">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${user.role === "admin" ? "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300" : "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"}`}>{user.role}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${user.role === "admin" ? "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300" : "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"}`}>{user.role}</span>
                         </div>
                         <div className="col-span-3 text-gray-500 dark:text-slate-400 text-xs">{assignedDevice ? assignedDevice.model : "—"}</div>
                       </div>
@@ -381,12 +452,114 @@ function Dashboard() {
         )}
 
         {/* ══════════════════════════════════════════════
+            TAB: CREDENTIALS (Admin only)
+        ══════════════════════════════════════════════ */}
+        {activeTab === "entries" && isAdmin && (
+          <>
+            {/* Add entry form */}
+            <form onSubmit={handleAddEntry} className={`${card} p-5 mb-4`}>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-4">Add New Credential</h3>
+              <div className="flex flex-col md:flex-row gap-3">
+                <input
+                  type="text"
+                  placeholder="Application (e.g. Gmail, AWS)"
+                  value={entryApp}
+                  onChange={(e) => setEntryApp(e.target.value)}
+                  className={inputClass}
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder="User ID / Email"
+                  value={entryUserId}
+                  onChange={(e) => setEntryUserId(e.target.value)}
+                  className={inputClass}
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder="Password"
+                  value={entryPassword}
+                  onChange={(e) => setEntryPassword(e.target.value)}
+                  className={inputClass}
+                  required
+                />
+                <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl text-sm font-medium transition whitespace-nowrap">
+                  Add Entry
+                </button>
+              </div>
+            </form>
+
+            {/* Search */}
+            <div className="mb-4">
+              <input
+                type="text"
+                placeholder="Search by application or user ID..."
+                value={entrySearch}
+                onChange={(e) => setEntrySearch(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+
+            {/* Entries list */}
+            <div className={`${card} overflow-hidden`}>
+              {filteredEntries.length === 0
+                ? <div className="p-12 text-center"><p className="text-gray-400">{entrySearch ? "No entries match your search" : "No credentials saved yet"}</p></div>
+                : <>
+                    <div className={`${headerRow} grid-cols-12`}>
+                      <div className="col-span-3">Application</div>
+                      <div className="col-span-3">User ID</div>
+                      <div className="col-span-3">Password</div>
+                      <div className="col-span-2">Added</div>
+                      <div className="col-span-1 text-right">Actions</div>
+                    </div>
+                    {filteredEntries.map((entry) => (
+                      <div key={entry._id} className={`${bodyRow} grid-cols-12`}>
+                        <div className="col-span-3 font-medium text-gray-800 dark:text-white">{entry.application}</div>
+                        <div className="col-span-3 text-gray-600 dark:text-slate-300 text-xs font-mono">{entry.userId}</div>
+                        <div className="col-span-3 flex items-center gap-2">
+                          <span className="text-gray-600 dark:text-slate-300 text-xs font-mono">
+                            {showEntryPasswords[entry._id] ? entry.password : "••••••••"}
+                          </span>
+                          <button
+                            onClick={() => toggleShowPassword(entry._id)}
+                            className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 text-xs transition"
+                          >
+                            {showEntryPasswords[entry._id] ? "🙈" : "👁️"}
+                          </button>
+                        </div>
+                        <div className="col-span-2 text-gray-400 dark:text-slate-500 text-xs">
+                          {new Date(entry.createdAt).toLocaleDateString()}
+                        </div>
+                        <div className="col-span-1 flex gap-1 justify-end">
+                          <button
+                            onClick={() => openEditEntry(entry)}
+                            className="bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-2 py-1.5 rounded-lg text-xs font-medium transition"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteEntry(entry._id)}
+                            className="bg-red-100 hover:bg-red-200 dark:bg-red-900/40 text-red-700 dark:text-red-400 px-2 py-1.5 rounded-lg text-xs font-medium transition"
+                          >
+                            Del
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+              }
+            </div>
+          </>
+        )}
+
+        {/* ══════════════════════════════════════════════
             TAB: MY REQUESTS
         ══════════════════════════════════════════════ */}
         {activeTab === "myrequests" && !isAdmin && (
           <div className={`${card} overflow-hidden`}>
             {myRequests.length === 0
-              ? <div className="p-12 text-center"><p className="text-gray-400">No requests yet — go to Devices tab to request one</p></div>
+              ? <div className="p-12 text-center"><p className="text-gray-400">No requests yet</p></div>
               : <>
                   <div className={`${headerRow} grid-cols-12`}>
                     <div className="col-span-4">Device</div><div className="col-span-3">Type</div>
@@ -406,11 +579,10 @@ function Dashboard() {
         )}
 
         {/* ══════════════════════════════════════════════
-            TAB: INCOMING (requests for my device + transfers to me)
+            TAB: INCOMING
         ══════════════════════════════════════════════ */}
         {activeTab === "incoming" && !isAdmin && (
           <div className="space-y-6">
-            {/* Requests for my device */}
             <div>
               <h3 className="text-sm font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide mb-3">
                 Requests for Your Device {incomingRequests.length > 0 && <span className="text-yellow-600">({incomingRequests.length})</span>}
@@ -437,15 +609,13 @@ function Dashboard() {
                 }
               </div>
             </div>
-
-            {/* Transfers offered to me */}
             <div>
               <h3 className="text-sm font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide mb-3">
                 Transfers Offered to You {incomingTransfers.length > 0 && <span className="text-purple-600">({incomingTransfers.length})</span>}
               </h3>
               <div className={`${card} overflow-hidden`}>
                 {incomingTransfers.length === 0
-                  ? <div className="p-8 text-center"><p className="text-gray-400 text-sm">No pending transfers for you</p></div>
+                  ? <div className="p-8 text-center"><p className="text-gray-400 text-sm">No pending transfers</p></div>
                   : <>
                       <div className={`${headerRow} grid-cols-12`}>
                         <div className="col-span-4">Device</div><div className="col-span-4">From</div>
@@ -491,7 +661,7 @@ function Dashboard() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-slate-800 w-full max-w-md p-6 rounded-2xl shadow-xl">
             <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-1">Transfer Device</h2>
-            <p className="text-sm text-gray-400 dark:text-slate-400 mb-6">Transferring: <span className="font-medium text-gray-600 dark:text-slate-300">{transferDevice.model}</span></p>
+            <p className="text-sm text-gray-400 mb-6">Transferring: <span className="font-medium text-gray-600 dark:text-slate-300">{transferDevice.model}</span></p>
             <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Select Employee</label>
             <select value={selectedEmployee} onChange={(e) => setSelectedEmployee(e.target.value)} className={`${inputClass} mb-6`}>
               <option value="">— Choose an employee —</option>
@@ -502,6 +672,42 @@ function Dashboard() {
             <div className="flex gap-3">
               <button onClick={handleTransferSubmit} className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-3 rounded-xl flex-1 text-sm font-medium transition">Send Transfer Request</button>
               <button onClick={() => { setTransferDevice(null); setSelectedEmployee("") }} className="bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-600 dark:text-slate-300 px-5 py-3 rounded-xl text-sm transition">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Entry Modal ── */}
+      {editingEntry && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-800 w-full max-w-md p-6 rounded-2xl shadow-xl">
+            <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-6">Edit Credential</h2>
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Application"
+                value={editApp}
+                onChange={(e) => setEditApp(e.target.value)}
+                className={inputClass}
+              />
+              <input
+                type="text"
+                placeholder="User ID / Email"
+                value={editUserId}
+                onChange={(e) => setEditUserId(e.target.value)}
+                className={inputClass}
+              />
+              <input
+                type="text"
+                placeholder="Password"
+                value={editPassword}
+                onChange={(e) => setEditPassword(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={handleEditEntry} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-xl flex-1 text-sm font-medium transition">Save Changes</button>
+              <button onClick={() => setEditingEntry(null)} className="bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-600 dark:text-slate-300 px-5 py-3 rounded-xl text-sm transition">Cancel</button>
             </div>
           </div>
         </div>
