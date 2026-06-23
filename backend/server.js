@@ -8,9 +8,7 @@ const deviceRoutes = require("./src/routes/deviceRoutes")
 const authRoutes = require("./src/routes/authRoutes")
 const requestRoutes = require("./src/routes/requestRoutes")
 const notificationRoutes = require("./src/routes/notificationRoutes")
-
-
-
+const entryRoutes = require("./src/routes/entryRoutes")
 
 dotenv.config()
 
@@ -23,23 +21,11 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
-
-app.post("/api/auth/test", (req, res) => {
-  console.log("TEST ROUTE HIT")
-  console.log("BODY:", req.body)
-  res.json({ received: req.body })
-})
-
-app.use("/api/notifications",notificationRoutes)
-
-
-
 app.use("/api/auth", authRoutes)
 app.use("/api/devices", deviceRoutes)
 app.use("/api/requests", requestRoutes)
-
-
-
+app.use("/api/notifications", notificationRoutes)
+app.use("/api/entries", entryRoutes)
 
 app.get("/", (req, res) => {
   res.send("API Running")
