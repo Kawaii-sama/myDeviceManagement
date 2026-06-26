@@ -13,7 +13,7 @@ import {
 import { getNotifications } from "../services/notificationService"
 import { getEntries, addEntry, editEntry, deleteEntry } from "../services/entryService"
 
-const BASE = "http://localhost:5000"
+const BASE = import.meta.env.VITE_API_URL
 
 function Dashboard() {
   const [devices, setDevices] = useState([])
